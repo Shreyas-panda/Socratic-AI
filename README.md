@@ -28,8 +28,8 @@ An interactive, intelligent tutoring system built with LangGraph and Streamlit t
 Clone the repository and install dependencies:
 
 ```bash
-git clone https://github.com/yourusername/AITutorAgent.git
-cd AITutorAgent
+git clone https://github.com/shreyaspanda/Socratic.git
+cd Socratic
 pip install -r requirements.txt
 ```
 
