@@ -287,3 +287,17 @@ class TutorialDatabase:
         
         conn.close()
         return topics 
+
+    def get_user_stats(self, session_id: str) -> Dict[str, Any]:
+        """Aggregate stats for the dashboard (API compatibility layer)."""
+        stats = self.get_study_statistics(session_id)
+        topics = self.get_topic_breakdown(session_id)
+        
+        # Format subjects as a dictionary for app.py
+        subjects_dict = {t['subject']: t['count'] for t in topics}
+        
+        return {
+            "total_conversations": stats['total_conversations'],
+            "total_messages": stats['total_messages'],
+            "subjects": subjects_dict
+        } 

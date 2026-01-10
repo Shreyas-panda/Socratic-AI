@@ -1,0 +1,264 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="chat-container">
+    {% if not session.get('subject') %}
+    <!-- Modern Hero Section -->
+    <div class="welcome-container">
+        <div class="hero-content">
+            <h1 class="hero-title">Master any subject with <span class="gradient-text">Socratic-AI</span></h1>
+            <p class="hero-subtitle">Your personal AI tutor. Ask anything, explore deeply, and learn at your own pace.
+            </p>
+        </div>
+
+        <div class="input-container" style="width: 100%; max-width: 600px; margin-bottom: 2rem;">
+            <input type="text" id="subject-input" class="chat-input" placeholder="What sparks your curiosity today?"
+                style="height: auto;">
+            <div class="input-actions">
+                <button class="btn-icon btn-send" id="start-btn">
+                    <i class="fas fa-arrow-right"></i>
+                </button>
+            </div>
+        </div>
+
+        <div class="quick-start-grid">
+            <div class="suggestion-card" onclick="startSubject('Quantum Physics')">
+                <div class="suggestion-icon">⚛️</div>
+                <div class="suggestion-text">Quantum Physics</div>
+            </div>
+            <div class="suggestion-card" onclick="startSubject('World War II')">
+                <div class="suggestion-icon">🌍</div>
+                <div class="suggestion-text">World War II</div>
+            </div>
+            <div class="suggestion-card" onclick="startSubject('Python Programming')">
+                <div class="suggestion-icon">🐍</div>
+                <div class="suggestion-text">Python Programming</div>
+            </div>
+            <div class="suggestion-card" onclick="startSubject('Art History')">
+                <div class="suggestion-icon">🎨</div>
+                <div class="suggestion-text">Art History</div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <!-- Chat Interface -->
+    <div class="chat-header">
+        <h2>
+            <span style="opacity: 0.6; font-size: 0.9em; margin-right: 0.5rem;">Learning:</span>
+            {{ session.get('subject') }}
+        </h2>
+        <div class="header-actions">
+            <!-- Placeholder for PDF/Settings -->
+        </div>
+    </div>
+
+    <div class="chat-history" id="chat-history">
+        {% for msg in messages %}
+        <div class="message {{ msg.role }}">
+            <div class="message-avatar">
+                {% if msg.role == 'user' %}
+                <i class="fas fa-user"></i>
+                {% else %}
+                <i class="fas fa-robot"></i>
+                {% endif %}
+            </div>
+            <div class="message-content markdown-body" data-content="{{ msg.content }}">
+                <!-- Content injected via JS for safety/parsing -->
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+
+    <div class="input-area">
+        <!-- Quick Action Buttons -->
+        <div class="action-buttons"
+            style="max-width: 800px; margin: 0 auto 1rem auto; display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap;">
+            <button class="action-chip" onclick="setInputAndSend('Test my knowledge on this')">
+                <i class="fas fa-graduation-cap"></i> Quiz Me
+            </button>
+            <button class="action-chip" onclick="setInputAndSend('Explain this like I\'m 5')">
+                <i class="fas fa-child"></i> ELI5
+            </button>
+            <button class="action-chip" onclick="setInputAndSend('Give me a real-world example')">
+                <i class="fas fa-globe"></i> Example
+            </button>
+            <button class="action-chip" onclick="setInputAndSend('Summarize what we learned so far')">
+                <i class="fas fa-list-ul"></i> Summarize
+            </button>
+        </div>
+
+        <div class="input-container">
+            <textarea id="message-input" class="chat-input" placeholder="Ask a follow-up question..."
+                rows="1"></textarea>
+            <div class="input-actions">
+                <button class="btn-icon" id="mic-btn" title="Voice Input">
+                    <i class="fas fa-microphone"></i>
+                </button>
+                <button class="btn-icon btn-send" id="send-btn" title="Send">
+                    <i class="fas fa-paper-plane"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+<script>
+    // Include the startSubject function globally so onclick="" works
+    function startSubject(subject) {
+        document.getElementById('subject-input').value = subject;
+        document.getElementById('start-btn').click();
+    }
+
+    // Quick Action Helper
+    function setInputAndSend(text) {
+        const input = document.getElementById('message-input');
+        const sendBtn = document.getElementById('send-btn');
+        if (input && sendBtn) {
+            input.value = text;
+            sendBtn.click();
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+        const startBtn = document.getElementById('start-btn');
+        const sendBtn = document.getElementById('send-btn');
+        const messageInput = document.getElementById('message-input');
+        const subjectInput = document.getElementById('subject-input');
+        const chatHistory = document.getElementById('chat-history');
+
+        // Start Tutorial (Input Field)
+        if (startBtn && subjectInput) {
+            const startTutorial = async () => {
+                const subject = subjectInput.value.trim();
+                if (!subject) return;
+
+                // UI Loading State
+                startBtn.disabled = true;
+                startBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+                subjectInput.disabled = true;
+
+                try {
+                    const response = await fetch('/api/start_tutorial', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify({ subject: subject })
+                    });
+
+                    const data = await response.json();
+
+                    if (data.status === 'success') {
+                        // CRITICAL FIX: Redirect to /chat explicitly to ensure we render the chat interface
+                        // and DO NOT hit the '/' route which clears the session.
+                        // We use load_chat to be absolutely sure the session is set correctly.
+                        if (data.conversation_id) {
+                            window.location.href = `/load_chat/${data.conversation_id}`;
+                        } else {
+                            window.location.href = '/chat';
+                        }
+                    } else {
+                        alert('Error starting lesson: ' + data.error);
+                        resetButton();
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                    alert('Failed to start lesson');
+                    resetButton();
+                }
+            };
+
+            function resetButton() {
+                startBtn.disabled = false;
+                startBtn.innerHTML = '<i class="fas fa-arrow-right"></i>';
+                subjectInput.disabled = false;
+            }
+
+            startBtn.addEventListener('click', startTutorial);
+            subjectInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') startTutorial();
+            });
+        }
+
+        // Send Message
+        if (sendBtn && messageInput) {
+            const sendMessage = async () => {
+                const text = messageInput.value.trim();
+                if (!text) return;
+
+                // Optimistically append user message
+                appendMessage('user', text);
+                messageInput.value = '';
+                messageInput.style.height = 'auto'; // Reset height
+
+                try {
+                    const response = await fetch('/api/message', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ message: text })
+                    });
+
+                    const data = await response.json();
+                    if (data.response) {
+                        appendMessage('assistant', data.response);
+                    }
+                } catch (error) {
+                    console.error('Error:', error);
+                }
+            };
+
+            sendBtn.addEventListener('click', sendMessage);
+            messageInput.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+        }
+
+        function appendMessage(role, text) {
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `message ${role}`;
+
+            const avatar = document.createElement('div');
+            avatar.className = 'message-avatar';
+            avatar.innerHTML = role === 'user' ? '<i class="fas fa-user"></i>' : '<i class="fas fa-robot"></i>';
+
+            const content = document.createElement('div');
+            content.className = 'message-content markdown-body';
+
+            // USE MARKED to parse markdown
+            if (typeof marked !== 'undefined') {
+                content.innerHTML = marked.parse(text);
+            } else {
+                content.textContent = text;
+            }
+
+            msgDiv.appendChild(avatar);
+            msgDiv.appendChild(content);
+            chatHistory.appendChild(msgDiv);
+            scrollToBottom();
+        }
+
+        // Render existing history markdown
+        document.querySelectorAll('.message-content[data-content]').forEach(el => {
+            const raw = el.getAttribute('data-content');
+            if (typeof marked !== 'undefined' && raw) {
+                el.innerHTML = marked.parse(raw);
+            } else {
+                el.textContent = raw || '';
+            }
+        });
+
+        function scrollToBottom() {
+            if (chatHistory) {
+                chatHistory.scrollTop = chatHistory.scrollHeight;
+            }
+        }
+
+        // Initial Scroll
+        scrollToBottom();
+    });
+</script>
+{% endblock %}

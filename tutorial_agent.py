@@ -101,7 +101,12 @@ Structure your response as follows:
 5. Tips for further learning
 
 Keep the tutorial engaging, educational, and appropriate for beginners to intermediate learners.
-Use clear examples and explanations. Aim for about 300-500 words."""
+Use clear examples and explanations. Aim for about 200-300 words for a faster, more digestible start.
+
+formatting instructions: 
+- Use **BOLD** for all key terms, important words, and subtopic headers.
+- Use bullet points for lists.
+- Highlighting important concepts is CRITICAL. Use standard Markdown formatting."""
 
         response = self._call_llm(prompt)
         

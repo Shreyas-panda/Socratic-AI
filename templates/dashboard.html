@@ -1,0 +1,98 @@
+{% extends "layout.html" %}
+
+{% block content %}
+<div class="chat-container">
+    <div class="chat-header">
+        <h2><i class="fas fa-chart-pie"></i> Learning Dashboard</h2>
+    </div>
+
+    <div style="padding: 2rem; overflow-y: auto;">
+        <!-- Stats Cards -->
+        <div
+            style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+            <div class="suggestion-card" style="cursor: default;">
+                <div class="suggestion-icon" style="background: rgba(56, 189, 248, 0.1); color: var(--accent-primary);">
+                    <i class="fas fa-comments"></i>
+                </div>
+                <div>
+                    <h3 style="font-size: 2rem; font-weight: 700; margin-bottom: 0.25rem;" id="total-convs">-</h3>
+                    <p style="color: var(--text-secondary); font-size: 0.9rem;">Total Lessons</p>
+                </div>
+            </div>
+
+            <div class="suggestion-card" style="cursor: default;">
+                <div class="suggestion-icon"
+                    style="background: rgba(129, 140, 248, 0.1); color: var(--accent-secondary);">
+                    <i class="fas fa-comment-dots"></i>
+                </div>
+                <div>
+                    <h3 style="font-size: 2rem; font-weight: 700; margin-bottom: 0.25rem;" id="total-msgs">-</h3>
+                    <p style="color: var(--text-secondary); font-size: 0.9rem;">Messages Exchanged</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Charts -->
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem;">
+            <div class="suggestion-card" style="cursor: default; display: block;">
+                <h3 style="margin-bottom: 1.5rem; font-size: 1.1rem;">Topic Breakdown</h3>
+                <div style="position: relative; height: 300px;">
+                    <canvas id="subjectChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    document.addEventListener('DOMContentLoaded', async () => {
+        try {
+            const response = await fetch('/api/stats');
+            const data = await response.json();
+
+            // Update cards
+            document.getElementById('total-convs').textContent = data.total_conversations;
+            document.getElementById('total-msgs').textContent = data.total_messages;
+
+            // Render Chart
+            const ctx = document.getElementById('subjectChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: data.subjects.labels,
+                    datasets: [{
+                        label: 'Messages per Topic',
+                        data: data.subjects.data,
+                        backgroundColor: 'rgba(56, 189, 248, 0.6)',
+                        borderColor: 'rgba(56, 189, 248, 1)',
+                        borderWidth: 1,
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                            ticks: { color: '#94a3b8' }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#94a3b8' }
+                        }
+                    }
+                }
+            });
+
+        } catch (e) {
+            console.error("Error loading stats:", e);
+        }
+    });
+</script>
+{% endblock %}

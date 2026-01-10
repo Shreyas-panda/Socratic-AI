@@ -9,6 +9,21 @@ load_dotenv()
 # Single API key
 API_KEY = os.getenv("OPENROUTER_API_KEY")
 
+# If not in env, try Streamlit secrets
+if not API_KEY:
+    try:
+        import streamlit as st
+        # Accessing st.secrets can raise an error if no secrets file exists
+        API_KEY = st.secrets.get("OPENROUTER_API_KEY")
+    except Exception:
+        pass
+
+if not API_KEY:
+    raise ValueError(
+        "OpenRouter API Key not found. Please set the OPENROUTER_API_KEY environment variable "
+        "or add it to .streamlit/secrets.toml."
+    )
+
 # Create a single client
 client = OpenAI(
     base_url="https://openrouter.ai/api/v1",

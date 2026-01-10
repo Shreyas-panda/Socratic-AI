@@ -34,7 +34,8 @@ Structure your response as follows:
 5. Tips for further learning
 
 Keep the tutorial engaging, educational, and appropriate for {difficulty_level}.
-Use clear examples and explanations. Aim for about {length_target}."""
+Use clear examples and explanations. Aim for about {length_target}
+Always answer in plain text language only. DO NOT use markdown or any other formatting. """
 
 QUESTION_PROMPT_TEMPLATE = """You are an expert AI tutor teaching about {subject}.
 
