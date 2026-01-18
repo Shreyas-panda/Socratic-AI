@@ -88,3 +88,79 @@ async function toggleTempMode(checkbox) {
         console.error(e);
     }
 }
+
+async function exportPDF() {
+    const btn = document.querySelector('button[onclick="exportPDF()"]');
+    const originalContent = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Exporting...';
+    btn.disabled = true;
+
+    try {
+        const response = await fetch('/api/export_pdf');
+
+        if (response.ok) {
+            const blob = await response.blob();
+            const url = window.URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+
+            const contentDisposition = response.headers.get('Content-Disposition');
+            let filename = 'Socratic_Lesson.pdf';
+            if (contentDisposition) {
+                const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/);
+                if (filenameMatch.length === 2)
+                    filename = filenameMatch[1];
+            }
+
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            window.URL.revokeObjectURL(url);
+            a.remove();
+        } else {
+            const data = await response.json();
+            alert('Export failed: ' + (data.error || 'Unknown error'));
+        }
+    } catch (error) {
+        console.error('PDF Export Error:', error);
+        alert('Failed to export PDF');
+    } finally {
+        btn.innerHTML = originalContent;
+        btn.disabled = false;
+    }
+}
+
+async function handleImageUpload(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    const originalIcon = input.nextElementSibling.innerHTML;
+    input.nextElementSibling.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    input.nextElementSibling.disabled = true;
+
+    const formData = new FormData();
+    formData.append('image', file);
+    formData.append('question', "Explain this image to me.");
+
+    try {
+        const response = await fetch('/api/upload_image', {
+            method: 'POST',
+            body: formData
+        });
+
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            window.location.reload();
+        } else {
+            alert('Upload failed: ' + (data.error || 'Unknown error'));
+        }
+    } catch (e) {
+        console.error('Image upload failed', e);
+        alert('Failed to upload image');
+    } finally {
+        input.nextElementSibling.innerHTML = originalIcon;
+        input.nextElementSibling.disabled = false;
+        input.value = '';
+    }
+}

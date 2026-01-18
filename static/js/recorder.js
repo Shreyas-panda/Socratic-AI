@@ -83,10 +83,17 @@ document.addEventListener('DOMContentLoaded', () => {
             const data = await response.json();
 
             if (data.text) {
-                // Populate input box instead of sending immediately
+                // Populate input box
                 if (activeInput) {
                     activeInput.value = data.text;
                     activeInput.focus();
+
+                    // Auto-send if it's the chat message input
+                    if (activeInput.id === 'message-input') {
+                        const sendBtn = document.getElementById('send-btn');
+                        if (sendBtn) sendBtn.click();
+                    }
+
                     if (activeInput.tagName === 'TEXTAREA') {
                         activeInput.style.height = 'auto';
                         activeInput.style.height = activeInput.scrollHeight + 'px';

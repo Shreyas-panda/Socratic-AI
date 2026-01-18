@@ -12,7 +12,7 @@ An interactive, intelligent tutoring system built with **Flask**, **LangGraph**,
 
 ### 🛠️ Productivity Tools
 - **📊 Progress Dashboard**: Track your learning journey with detailed statistics and visualizations of topics studied.
-- **📥 PDF Export**: Download your entire lesson history as a beautifully formatted PDF for offline study (Coming Soon).
+- **📥 PDF Export**: Download your entire lesson history as a beautifully formatted PDF for offline study
 - **🔖 Smart Bookmarks**: Save important explanations or "aha!" moments for quick reference later.
 - **🔍 Deep Search**: Instantly find past discussions across all your learning sessions.
 - **🌗 Dark Mode**: Sleek "Midnight Pro" theme by default for comfortable late-night study sessions.

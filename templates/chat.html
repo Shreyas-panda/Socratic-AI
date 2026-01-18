@@ -91,6 +91,11 @@
             <textarea id="message-input" class="chat-input" placeholder="Ask a follow-up question..."
                 rows="1"></textarea>
             <div class="input-actions">
+                <input type="file" id="image-upload" accept="image/*" style="display: none;"
+                    onchange="handleImageUpload(this)">
+                <button class="btn-icon" onclick="document.getElementById('image-upload').click()" title="Upload Image">
+                    <i class="fas fa-image"></i>
+                </button>
                 <button class="btn-icon" id="mic-btn" title="Voice Input">
                     <i class="fas fa-microphone"></i>
                 </button>

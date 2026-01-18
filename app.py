@@ -79,6 +79,41 @@ def toggle_temp_mode():
     session['is_temporary_mode'] = data.get('enabled', False)
     return jsonify({"status": "success", "mode": session.get('is_temporary_mode')})
 
+@app.route('/api/export_pdf')
+def export_pdf():
+    if 'user_id' not in session or 'current_conversation_id' not in session:
+        return jsonify({"error": "No active conversation"}), 400
+    
+    try:
+        from pdf_export import export_conversation_to_pdf, create_pdf_download_name
+        
+        conversation_id = session['current_conversation_id']
+        subject = session.get('subject', 'Lesson')
+        
+        # Get history from DB
+        history = db.get_conversation_history(conversation_id)
+        
+        # Identify empty history
+        if not history:
+             return jsonify({"error": "Conversation is empty"}), 400
+             
+        # Generate PDF
+        pdf_bytes = export_conversation_to_pdf(subject, history)
+        
+        # Create unique filename
+        filename = create_pdf_download_name(subject)
+        
+        return send_file(
+            io.BytesIO(pdf_bytes),
+            mimetype='application/pdf',
+            as_attachment=True,
+            download_name=filename
+        )
+            
+    except Exception as e:
+        print(f"PDF Export Error: {e}")
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/api/history')
 def get_history():
     if 'user_id' not in session:
@@ -201,6 +236,7 @@ def message():
         language
     )
     
+    print(f"DEBUG: Agent result: {result}")
     return jsonify(result)
 
 @app.route('/api/audio', methods=['POST'])
@@ -230,6 +266,47 @@ def handle_audio():
 
     except Exception as e:
         print(f"Audio Error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/upload_image', methods=['POST'])
+def upload_image():
+    if 'image' not in request.files:
+        return jsonify({"error": "No image part"}), 400
+    
+    file = request.files['image']
+    if file.filename == '':
+        return jsonify({"error": "No selected file"}), 400
+        
+    if 'current_conversation_id' not in session:
+         return jsonify({"error": "No active conversation"}), 400
+
+    try:
+        from image_handler import save_uploaded_image, analyze_image_with_llm
+        
+        conversation_id = str(session['current_conversation_id'])
+        
+        # Save image
+        filepath = save_uploaded_image(file, conversation_id)
+        
+        # Analyze image
+        user_question = request.form.get('question', "Explain this image to me.")
+        subject = session.get('subject', 'General Topic')
+        
+        analysis = analyze_image_with_llm(filepath, user_question, subject)
+        
+        # Add to database
+        db.add_message(session['current_conversation_id'], "user", f"[Image Uploaded] {user_question} \n\n(Analysis: {analysis})", "image_analysis")
+        db.add_message(session['current_conversation_id'], "assistant", analysis)
+        
+        return jsonify({
+            "status": "success",
+            "analysis": analysis,
+            "filepath": filepath
+        })
+        
+    except Exception as e:
+        print(f"Image Upload Error: {e}")
         return jsonify({"error": str(e)}), 500
 
 if __name__ == '__main__':

@@ -22,7 +22,7 @@ def save_uploaded_image(image_file, conversation_id: str) -> str:
     Save an uploaded image to disk.
     
     Args:
-        image_file: Streamlit uploaded file object
+        image_file: File storage object or path
         conversation_id: ID of the conversation
     
     Returns:
@@ -32,7 +32,7 @@ def save_uploaded_image(image_file, conversation_id: str) -> str:
     
     # Generate unique filename
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-    file_extension = image_file.name.split('.')[-1]
+    file_extension = image_file.filename.split('.')[-1]
     filename = f"{conversation_id}_{timestamp}.{file_extension}"
     filepath = os.path.join(IMAGES_DIR, filename)
     
@@ -105,7 +105,7 @@ def analyze_image_with_llm(image_path: str, user_question: str, subject: str) ->
             messages=messages,
             max_tokens=1000,
             extra_headers={
-                "HTTP-Referer": "http://localhost:8501",
+                "HTTP-Referer": "http://127.0.0.1:5000",
                 "X-Title": "Socratic AI Tutor"
             }
         )
@@ -149,7 +149,7 @@ def get_image_description(image_path: str) -> str:
             messages=messages,
             max_tokens=100,
             extra_headers={
-                "HTTP-Referer": "http://localhost:8501",
+                "HTTP-Referer": "http://127.0.0.1:5000",
                 "X-Title": "Socratic AI Tutor"
             }
         )

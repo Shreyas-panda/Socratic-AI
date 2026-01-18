@@ -265,7 +265,7 @@ Be supportive and educational. Rate their understanding and provide specific fee
         """Call the LLM using the existing API setup."""
         try:
             completion = client.chat.completions.create(
-                model="meta-llama/llama-4-scout",
+                model="meta-llama/llama-3.3-70b-instruct:free",
                 messages=[{"role": "user", "content": prompt}],
                 extra_headers={
                     "HTTP-Referer": "AI-Tutorial-Agent",
