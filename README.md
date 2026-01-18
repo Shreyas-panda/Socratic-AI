@@ -9,6 +9,7 @@ An interactive, intelligent tutoring system built with **Flask**, **LangGraph**,
 - **💬 Interactive Socratic Method**: Uses the Socratic method to guide you to answers rather than just giving them.
 - **🧠 Knowledge Checks**: Periodically tests your understanding with quizzes and provides constructive feedback.
 - **🗣️ Voice Interaction**: Speak your questions naturally using the built-in voice recorder (Speech-to-Text).
+- **📷 Image Analysis**: Upload diagrams or text snippets, and the AI will analyze and explain them to you.
 
 ### 🛠️ Productivity Tools
 - **📊 Progress Dashboard**: Track your learning journey with detailed statistics and visualizations of topics studied.
@@ -58,7 +59,7 @@ The app will open automatically in your browser at `http://127.0.0.1:5000`.
 ## 📖 How to Use
 
 1.  **Start a Lesson**: In the main menu, type a topic (e.g., "Quantum Physics", "French Revolution") and click the arrow button.
-2.  **Interact**: Read the tutorial, then ask follow-up questions in the chat. You can type or use the **microphone button** 🎤 to speak.
+2.  **Interact**: Read the tutorial, then ask follow-up questions in the chat. You can type, use the **microphone button** 🎤 to speak, or **upload images** 📷 for analysis.
 3.  **Save & Organize**:
     *   Use the **Sidebar** to access History, Start a New Chat, or View the Dashboard.
 4.  **Review**:
