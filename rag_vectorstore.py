@@ -29,3 +29,13 @@ def load_vector_store(embeddings):
         return None
         
     return FAISS.load_local(INDEX_PATH, embeddings, allow_dangerous_deserialization=True)
+
+def clear_vector_store():
+    """
+    Delete the vector store index to start fresh.
+    """
+    import shutil
+    if os.path.exists(INDEX_PATH):
+        shutil.rmtree(INDEX_PATH)
+        return True
+    return False

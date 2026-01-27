@@ -289,3 +289,33 @@ async function handleDocumentUpload(input) {
         input.value = '';
     }
 }
+
+async function clearKnowledgeBase() {
+    if (!confirm('This will remove all uploaded documents from the knowledge base. Continue?')) {
+        return;
+    }
+
+    const btn = document.getElementById('clear-kb-btn');
+    const originalIcon = btn.innerHTML;
+    btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+    btn.disabled = true;
+
+    try {
+        const response = await fetch('/api/clear_knowledge_base', {
+            method: 'POST'
+        });
+        const data = await response.json();
+
+        if (data.status === 'success') {
+            alert('✓ ' + data.message);
+        } else {
+            alert('Failed: ' + (data.error || 'Unknown error'));
+        }
+    } catch (error) {
+        console.error('Clear KB Error:', error);
+        alert('Failed to clear knowledge base.');
+    } finally {
+        btn.innerHTML = originalIcon;
+        btn.disabled = false;
+    }
+}

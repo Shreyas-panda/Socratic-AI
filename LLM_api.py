@@ -1,34 +1,34 @@
 import time
 from openai import OpenAI
+from groq import Groq
 
 import os
 from dotenv import load_dotenv
 
 load_dotenv()
 
-# Single API key
-API_KEY = os.getenv("OPENROUTER_API_KEY")
+# Try Groq first (faster, higher limits), fallback to OpenRouter
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY")
 
-# If not in env, try Streamlit secrets
-if not API_KEY:
-    try:
-        import streamlit as st
-        # Accessing st.secrets can raise an error if no secrets file exists
-        API_KEY = st.secrets.get("OPENROUTER_API_KEY")
-    except Exception:
-        pass
-
-if not API_KEY:
-    raise ValueError(
-        "OpenRouter API Key not found. Please set the OPENROUTER_API_KEY environment variable "
-        "or add it to .streamlit/secrets.toml."
+# Determine which provider to use
+if GROQ_API_KEY:
+    print("Using Groq API (fast, reliable)")
+    client = Groq(api_key=GROQ_API_KEY)
+    LLM_PROVIDER = "groq"
+    DEFAULT_MODEL = "llama-3.3-70b-versatile"
+elif OPENROUTER_API_KEY:
+    print("Using OpenRouter API (fallback)")
+    client = OpenAI(
+        base_url="https://openrouter.ai/api/v1",
+        api_key=OPENROUTER_API_KEY,
     )
-
-# Create a single client
-client = OpenAI(
-    base_url="https://openrouter.ai/api/v1",
-    api_key=API_KEY,
-)
+    LLM_PROVIDER = "openrouter"
+    DEFAULT_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
+else:
+    raise ValueError(
+        "No API key found. Please set GROQ_API_KEY (recommended) or OPENROUTER_API_KEY in .env"
+    )
 
 def send_request(prompt):
     """Send a single request to the API and return the result."""

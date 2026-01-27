@@ -1,5 +1,5 @@
 import os
-from flask import Flask, render_template, request, jsonify, session, send_file, redirect, url_for
+from flask import Flask, render_template, request, jsonify, session, send_file, redirect, url_for, Response
 from tutorial_agent import TutorialAgent
 from database import TutorialDatabase
 from rag_engine import RAGEngine
@@ -302,6 +302,68 @@ def message():
 
     except Exception as e:
         print(f"Message Error: {e}")
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/message_stream', methods=['POST'])
+def message_stream():
+    """Streaming endpoint for real-time responses."""
+    if 'user_id' not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    if 'current_conversation_id' not in session:
+        return jsonify({"error": "No active conversation"}), 400
+    
+    data = request.json
+    user_input = data.get('message', '').strip()
+    language = data.get('language', 'English')
+    
+    if not user_input:
+        return jsonify({"error": "Message is required"}), 400
+    
+    conversation_id = session['current_conversation_id']
+    subject = session.get('subject', 'General Topic')
+    
+    # RAG retrieval
+    context = ""
+    try:
+        context = rag_engine.get_formatted_context(user_input)
+    except Exception as e:
+        print(f"RAG Retrieval Error: {e}")
+    
+    # Build prompt (simplified for streaming)
+    prompt = f"""You are an expert AI tutor teaching about {subject}.
+IMPORTANT: Write the entire response in {language}.
+
+{context}
+
+The student asked: "{user_input}"
+
+Provide a clear, detailed explanation. Use examples where helpful.
+If the provided 'CONTEXT FROM UPLOADED DOCUMENTS' is relevant, USE IT."""
+
+    def generate():
+        full_response = ""
+        for chunk in agent._call_llm_stream(prompt):
+            full_response += chunk
+            yield chunk
+        
+        # Save to DB after stream completes
+        db.add_message(conversation_id, "user", user_input, "question")
+        db.add_message(conversation_id, "assistant", full_response, "answer")
+    
+    return Response(generate(), mimetype='text/plain')
+
+@app.route('/api/clear_knowledge_base', methods=['POST'])
+def clear_knowledge_base():
+    """Clear all documents from the RAG knowledge base."""
+    try:
+        result = rag_engine.clear_knowledge_base()
+        if result:
+            return jsonify({"status": "success", "message": "Knowledge base cleared."})
+        else:
+            return jsonify({"status": "success", "message": "Knowledge base was already empty."})
+    except Exception as e:
+        print(f"Clear KB Error: {e}")
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/audio', methods=['POST'])

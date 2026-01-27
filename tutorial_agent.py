@@ -161,20 +161,23 @@ formatting instructions:
         # Get RAG context from state (populated by _retrieve_knowledge node)
         rag_context = state.get("retrieved_context", "")
         
-        prompt = f"""You are an expert AI tutor teaching about {subject}.
-        
-        IMPORTANT: Write the entire response in {language}.
+        prompt = f"""You are a helpful, ethical AI tutor teaching about {subject}.
 
-Previous conversation context:
+RULES:
+1. Answer EXACTLY what the user asks - no more, no less
+2. Be direct and concise - avoid unnecessary explanations
+3. Be ethical and honest
+4. Write your response in {language}
+
+Previous context:
 {context}
 
 {rag_context}
 
-The student has asked: "{user_question}"
+User's question: "{user_question}"
 
-Provide a clear, detailed explanation that directly answers their question. Use examples where helpful.
-If the provided 'CONTEXT FROM UPLOADED DOCUMENTS' is relevant, USE IT to answer the question and cite it (e.g., "According to your document...").
-Be encouraging and educational. If the question is off-topic, gently guide them back to {subject}."""
+If there is relevant context from uploaded documents, use it and cite it briefly.
+Provide a direct, focused answer."""
 
         response = self._call_llm(prompt)
         
@@ -291,35 +294,34 @@ Be supportive and educational. Rate their understanding and provide specific fee
     
     def _call_llm(self, prompt: str) -> str:
         """Call the LLM using the existing API setup."""
+        from LLM_api import DEFAULT_MODEL, LLM_PROVIDER
         try:
-            print(f"DEBUG: Calling LLM with prompt preview: {prompt[:50]}...")
+            print(f"DEBUG: Calling LLM ({LLM_PROVIDER}: {DEFAULT_MODEL})...")
             completion = client.chat.completions.create(
-                model="meta-llama/llama-3.3-70b-instruct:free",
+                model=DEFAULT_MODEL,
                 messages=[{"role": "user", "content": prompt}],
-                extra_headers={
-                    "HTTP-Referer": "AI-Tutorial-Agent",
-                    "X-Title": "AI Tutorial Agent",
-                },
             )
             
-            # Debugging the response structure
-            if not completion:
-                print("DEBUG: Completion object is None")
-                return "Error: No response from AI provider."
-                
-            if not hasattr(completion, 'choices') or completion.choices is None:
-                print(f"DEBUG: Invalid completion format: {completion}")
-                return "Error: Invalid response format from AI provider."
-                
-            if len(completion.choices) == 0:
-                print("DEBUG: Choices list is empty")
-                return "Error: Empty response from AI provider."
-
-            return completion.choices[0].message.content
+            if completion and hasattr(completion, 'choices') and completion.choices:
+                return completion.choices[0].message.content
+            return "Error: No response from AI provider."
         except Exception as e:
-            import traceback
-            traceback.print_exc()
-            return f"I apologize, but I encountered an error: {str(e)}. Please check the server logs."
+            return f"Error: {str(e)}"
+    
+    def _call_llm_stream(self, prompt: str):
+        """Stream LLM response chunk by chunk."""
+        from LLM_api import DEFAULT_MODEL
+        try:
+            stream = client.chat.completions.create(
+                model=DEFAULT_MODEL,
+                messages=[{"role": "user", "content": prompt}],
+                stream=True,
+            )
+            for chunk in stream:
+                if chunk.choices and chunk.choices[0].delta.content:
+                    yield chunk.choices[0].delta.content
+        except Exception as e:
+            yield f"Error: {str(e)}"
     
     def _route_after_tutorial(self, state: TutorialState) -> str:
         """Route after tutorial generation - wait for user input."""

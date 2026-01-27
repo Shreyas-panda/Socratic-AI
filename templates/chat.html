@@ -87,49 +87,55 @@
             </button>
         </div>
 
-        <div class="input-container" style="flex-direction: column; align-items: stretch; gap: 0;">
+        <div class="input-container modern-chatbox">
             <!-- Image Preview Area -->
-            <div id="image-preview"
-                style="display: none; padding: 0.75rem; border-bottom: 1px solid var(--border-color); align-items: center; gap: 1rem;">
-                <img id="preview-img" src=""
-                    style="width: 48px; height: 48px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border-color);">
-                <div style="flex: 1; min-width: 0;">
-                    <div id="preview-filename"
-                        style="font-size: 0.85rem; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                    </div>
-                    <div style="font-size: 0.75rem; color: var(--text-secondary);">Attached</div>
+            <div id="image-preview" class="image-preview-area" style="display: none;">
+                <img id="preview-img" src="" class="preview-thumbnail">
+                <div class="preview-info">
+                    <div id="preview-filename" class="preview-name"></div>
+                    <div class="preview-label">Attached</div>
                 </div>
-                <button onclick="clearImage()" class="btn-icon"
-                    style="width: 32px; height: 32px; color: var(--text-secondary); background: rgba(0,0,0,0.1);">
+                <button onclick="clearImage()" class="btn-icon btn-close-preview">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
 
-            <div style="display: flex; align-items: center; gap: 0.75rem; width: 100%; padding: 0.75rem;">
-                <textarea id="message-input" class="chat-input" placeholder="Ask a follow-up question..."
-                    rows="1"></textarea>
-                <div class="input-actions">
+            <!-- Text Input Area -->
+            <textarea id="message-input" class="chat-input" placeholder="Ask a follow-up question..."
+                rows="1"></textarea>
+
+            <!-- Bottom Action Bar -->
+            <div class="input-action-bar">
+                <div class="input-actions-left">
                     <input type="file" id="image-upload" accept="image/*" style="display: none;"
                         onchange="handleImageUpload(this)">
-                    <button class="btn-icon" onclick="document.getElementById('image-upload').click()"
+                    <button class="btn-action" onclick="document.getElementById('image-upload').click()"
                         title="Upload Image">
                         <i class="fas fa-image"></i>
                     </button>
-                    <!-- Document Upload -->
+
                     <input type="file" id="document-upload" accept=".pdf,.txt,.md" style="display: none;"
                         onchange="handleDocumentUpload(this)">
-                    <button class="btn-icon" id="doc-upload-btn"
-                        onclick="document.getElementById('document-upload').click()" title="Upload Document (PDF/Text)">
+                    <button class="btn-action" id="doc-upload-btn"
+                        onclick="document.getElementById('document-upload').click()" title="Upload Document">
                         <i class="fas fa-file-alt"></i>
                     </button>
-                    <button class="btn-icon" id="mic-btn" title="Voice Input">
+
+                    <button class="btn-action" id="clear-kb-btn" onclick="clearKnowledgeBase()"
+                        title="Clear Knowledge Base">
+                        <i class="fas fa-trash-alt"></i>
+                    </button>
+
+                    <button class="btn-action" id="mic-btn" title="Voice Input">
                         <i class="fas fa-microphone"></i>
                     </button>
-                    <button class="btn-icon btn-send" id="send-btn" title="Send">
+                </div>
+
+                <div class="input-actions-right">
+                    <button class="btn-send-modern" id="send-btn" title="Send">
                         <i class="fas fa-paper-plane"></i>
                     </button>
-                    <button class="btn-icon btn-stop" id="stop-btn" title="Stop Generation"
-                        style="display: none; color: #ef4444;">
+                    <button class="btn-stop-modern" id="stop-btn" title="Stop Generation" style="display: none;">
                         <i class="fas fa-stop-circle"></i>
                     </button>
                 </div>
@@ -154,6 +160,39 @@
             input.value = text;
             sendBtn.click();
         }
+    }
+
+    // Text-to-Speech function
+    let currentUtterance = null;
+    function toggleSpeech(text, btn) {
+        // If already speaking this text, stop it
+        if (speechSynthesis.speaking) {
+            speechSynthesis.cancel();
+            btn.innerHTML = '<i class="fas fa-volume-up"></i>';
+            currentUtterance = null;
+            return;
+        }
+
+        // Create new utterance
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.rate = 1.0;
+        utterance.pitch = 1.0;
+
+        // Update button to show speaking state
+        btn.innerHTML = '<i class="fas fa-stop"></i>';
+
+        utterance.onend = () => {
+            btn.innerHTML = '<i class="fas fa-volume-up"></i>';
+            currentUtterance = null;
+        };
+
+        utterance.onerror = () => {
+            btn.innerHTML = '<i class="fas fa-volume-up"></i>';
+            currentUtterance = null;
+        };
+
+        currentUtterance = utterance;
+        speechSynthesis.speak(utterance);
     }
 
     // Initialize Highlight.js & KaTeX
@@ -399,8 +438,8 @@
                             signal: signal
                         });
                     } else {
-                        // JSON Send
-                        response = await fetch('/api/message', {
+                        // Streaming Send for text-only messages
+                        response = await fetch('/api/message_stream', {
                             method: 'POST',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
@@ -409,6 +448,51 @@
                             }),
                             signal: signal
                         });
+
+                        // Remove typing indicator before showing response
+                        removeTypingIndicator();
+
+                        if (!response.ok) {
+                            const errorData = await response.json();
+                            appendMessage('assistant', `⚠️ **Error:** ${errorData.error || 'Unknown error'}`);
+                            return;
+                        }
+
+                        // Create a message element for streaming
+                        const msgId = 'stream-msg-' + Date.now();
+                        const msgDiv = document.createElement('div');
+                        msgDiv.className = 'message assistant';
+                        msgDiv.id = msgId;
+                        msgDiv.innerHTML = `
+                            <div class="message-avatar"><i class="fas fa-robot"></i></div>
+                            <div class="message-content markdown-body"><span class="streaming-cursor">▋</span></div>
+                        `;
+                        chatHistory.appendChild(msgDiv);
+                        chatHistory.scrollTop = chatHistory.scrollHeight;
+
+                        const contentDiv = msgDiv.querySelector('.message-content');
+                        let fullText = '';
+
+                        // Read the stream
+                        const reader = response.body.getReader();
+                        const decoder = new TextDecoder();
+
+                        while (true) {
+                            const { done, value } = await reader.read();
+                            if (done) break;
+
+                            const chunk = decoder.decode(value, { stream: true });
+                            fullText += chunk;
+
+                            // Render markdown as we go
+                            contentDiv.innerHTML = marked.parse(fullText) + '<span class="streaming-cursor">▋</span>';
+                            chatHistory.scrollTop = chatHistory.scrollHeight;
+                        }
+
+                        // Final render without cursor
+                        contentDiv.innerHTML = marked.parse(fullText);
+                        renderRichContent(contentDiv);
+                        return; // Skip regular response handling
                     }
 
                     const data = await response.json();

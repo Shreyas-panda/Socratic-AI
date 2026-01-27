@@ -1,6 +1,6 @@
 from rag_loader import load_and_split_document
 from rag_embeddings import embedding_model
-from rag_vectorstore import create_vector_store, load_vector_store
+from rag_vectorstore import create_vector_store, load_vector_store, clear_vector_store
 from rag_retriever import retrieve_context
 
 class RAGEngine:
@@ -45,3 +45,11 @@ class RAGEngine:
             return ""
         
         return f"CONTEXT FROM UPLOADED DOCUMENTS:\n{context}\n---\n"
+
+    def clear_knowledge_base(self) -> bool:
+        """
+        Clear all documents from the knowledge base.
+        """
+        result = clear_vector_store()
+        self.vector_store = None
+        return result
