@@ -11,10 +11,33 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <!-- Markdown Parser -->
     <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!-- Highlight.js for Syntax Highlighting -->
+    <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/styles/atom-one-dark.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.7.0/highlight.min.js"></script>
+    <!-- KaTeX for Math Rendering -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.8/dist/contrib/auto-render.min.js"></script>
 </head>
 
 <body class="theme-midnight">
     <div class="app-container">
+        <!-- Mobile Header (Visible only on small screens) -->
+        <div class="mobile-header">
+            <button class="btn-icon mobile-menu-btn" onclick="toggleSidebar()">
+                <i class="fas fa-bars"></i>
+            </button>
+            <div class="logo-container mobile-logo">
+                <i class="fas fa-columns logo-icon" style="font-size: 1.2rem;"></i>
+                <h1 style="font-size: 1.2rem; margin: 0;">Socratic</h1>
+            </div>
+            <div style="width: 44px;"></div> <!-- Spacer for balance -->
+        </div>
+
+        <!-- Sidebar Overlay -->
+        <div class="sidebar-overlay" onclick="toggleSidebar()"></div>
+
         <!-- Sidebar -->
         <aside class="sidebar">
             <div class="sidebar-header">
@@ -92,6 +115,9 @@
                     </button>
                 </div>
             </div>
+
+            <!-- Resizer Handle -->
+            <div class="resizer"></div>
         </aside>
 
         <!-- Main Content -->

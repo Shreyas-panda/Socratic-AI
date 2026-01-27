@@ -6,6 +6,7 @@ from database import TutorialDatabase
 
 # Import the existing API configuration
 from LLM_api import client
+from rag_engine import RAGEngine
 
 class TutorialState(TypedDict):
     """State object for the tutorial agent."""
@@ -16,12 +17,14 @@ class TutorialState(TypedDict):
     evaluation_count: int
     user_understanding: Dict[str, Any]
     language: str
+    retrieved_context: str # Added for RAG
 
 class TutorialAgent:
     """LangGraph-based AI tutorial agent."""
     
     def __init__(self):
         self.db = TutorialDatabase()
+        self.rag_engine = RAGEngine()
         self.graph = self._create_graph()
     
     def _create_graph(self) -> StateGraph:
@@ -34,6 +37,7 @@ class TutorialAgent:
         
         # Add nodes
         workflow.add_node("generate_tutorial", self._generate_tutorial)
+        workflow.add_node("retrieve_knowledge", self._retrieve_knowledge) # RAG Node
         workflow.add_node("handle_question", self._handle_question)
         workflow.add_node("create_evaluation", self._create_evaluation)
         workflow.add_node("evaluate_answer", self._evaluate_answer)
@@ -46,17 +50,20 @@ class TutorialAgent:
             "generate_tutorial",
             self._route_after_tutorial,
             {
-                "question": "handle_question",
+                "question": "retrieve_knowledge", # Route to RAG first for questions
                 "evaluation": "create_evaluation",
                 "end": END
             }
         )
         
+        # Edge from retrieval to question handling
+        workflow.add_edge("retrieve_knowledge", "handle_question")
+        
         workflow.add_conditional_edges(
             "handle_question",
             self._route_after_question,
             {
-                "question": "handle_question",
+                "question": "retrieve_knowledge", # Loop back to RAG for follow-up questions
                 "evaluation": "create_evaluation",
                 "end": END
             }
@@ -66,7 +73,7 @@ class TutorialAgent:
             "create_evaluation",
             self._route_after_evaluation,
             {
-                "question": "handle_question",
+                "question": "retrieve_knowledge",
                 "evaluation": "create_evaluation",
                 "end": END
             }
@@ -76,7 +83,7 @@ class TutorialAgent:
             "evaluate_answer",
             self._route_after_evaluation_answer,
             {
-                "question": "handle_question",
+                "question": "retrieve_knowledge",
                 "evaluation": "create_evaluation",
                 "end": END
             }
@@ -125,6 +132,19 @@ formatting instructions:
             "messages": state["messages"] + [tutorial_message],
             "current_mode": "qa"
         }
+
+    def _retrieve_knowledge(self, state: TutorialState) -> dict:
+        """Retrieve relevant context from the knowledge base."""
+        # Get the latest user question
+        last_message = state["messages"][-1]
+        query = last_message.content
+        
+        # Use RAG engine facade to get formatted context
+        # Note: We are using the facade's helper which returns a string "CONTEXT FROM..."
+        # We store this in the state.
+        context = self.rag_engine.get_formatted_context(query)
+        
+        return {"retrieved_context": context}
     
     def _handle_question(self, state: TutorialState) -> TutorialState:
         """Handle user questions about the tutorial content."""
@@ -136,6 +156,11 @@ formatting instructions:
         context_messages = state["messages"][-5:]  # Last 5 messages for context
         context = "\n".join([f"{msg.__class__.__name__[:-7]}: {msg.content}" for msg in context_messages])
         
+        context = "\n".join([f"{msg.__class__.__name__[:-7]}: {msg.content}" for msg in context_messages])
+        
+        # Get RAG context from state (populated by _retrieve_knowledge node)
+        rag_context = state.get("retrieved_context", "")
+        
         prompt = f"""You are an expert AI tutor teaching about {subject}.
         
         IMPORTANT: Write the entire response in {language}.
@@ -143,9 +168,12 @@ formatting instructions:
 Previous conversation context:
 {context}
 
+{rag_context}
+
 The student has asked: "{user_question}"
 
 Provide a clear, detailed explanation that directly answers their question. Use examples where helpful.
+If the provided 'CONTEXT FROM UPLOADED DOCUMENTS' is relevant, USE IT to answer the question and cite it (e.g., "According to your document...").
 Be encouraging and educational. If the question is off-topic, gently guide them back to {subject}."""
 
         response = self._call_llm(prompt)
@@ -264,6 +292,7 @@ Be supportive and educational. Rate their understanding and provide specific fee
     def _call_llm(self, prompt: str) -> str:
         """Call the LLM using the existing API setup."""
         try:
+            print(f"DEBUG: Calling LLM with prompt preview: {prompt[:50]}...")
             completion = client.chat.completions.create(
                 model="meta-llama/llama-3.3-70b-instruct:free",
                 messages=[{"role": "user", "content": prompt}],
@@ -272,9 +301,25 @@ Be supportive and educational. Rate their understanding and provide specific fee
                     "X-Title": "AI Tutorial Agent",
                 },
             )
+            
+            # Debugging the response structure
+            if not completion:
+                print("DEBUG: Completion object is None")
+                return "Error: No response from AI provider."
+                
+            if not hasattr(completion, 'choices') or completion.choices is None:
+                print(f"DEBUG: Invalid completion format: {completion}")
+                return "Error: Invalid response format from AI provider."
+                
+            if len(completion.choices) == 0:
+                print("DEBUG: Choices list is empty")
+                return "Error: Empty response from AI provider."
+
             return completion.choices[0].message.content
         except Exception as e:
-            return f"I apologize, but I encountered an error: {str(e)}. Please try again."
+            import traceback
+            traceback.print_exc()
+            return f"I apologize, but I encountered an error: {str(e)}. Please check the server logs."
     
     def _route_after_tutorial(self, state: TutorialState) -> str:
         """Route after tutorial generation - wait for user input."""
@@ -305,7 +350,8 @@ Be supportive and educational. Rate their understanding and provide specific fee
             current_mode="tutorial",
             evaluation_count=0,
             user_understanding={},
-            language=language
+            language=language,
+            context="" # Initialize RAG context
         )
         
         # Generate tutorial
@@ -317,7 +363,7 @@ Be supportive and educational. Rate their understanding and provide specific fee
             "mode": result["current_mode"]
         }
     
-    def continue_conversation(self, conversation_id: int, user_input: str, input_type: str = "question", language: str = "English") -> Dict[str, Any]:
+    def continue_conversation(self, conversation_id: int, user_input: str, input_type: str = "question", language: str = "English", context: str = "") -> Dict[str, Any]:
         """Continue an existing conversation."""
         # Get conversation history
         history = self.db.get_conversation_history(conversation_id)
@@ -364,7 +410,8 @@ Be supportive and educational. Rate their understanding and provide specific fee
             current_mode=current_mode,
             evaluation_count=evaluation_count,
             user_understanding={},
-            language=language
+            language=language,
+            context=context # Pass RAG context
         )
         
         # Process based on input type and current mode
@@ -373,6 +420,9 @@ Be supportive and educational. Rate their understanding and provide specific fee
         elif input_type == "evaluation_request":
             result = self._create_evaluation(state)
         else:
+            # IMPORTANT: Call RAG retrieval FIRST to populate context
+            rag_update = self._retrieve_knowledge(state)
+            state = {**state, **rag_update}  # Merge retrieved context into state
             result = self._handle_question(state)
         
         return {

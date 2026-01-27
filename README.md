@@ -54,7 +54,7 @@ OPENROUTER_API_KEY=your_api_key_here
 python3 app.py
 ```
 
-The app will open automatically in your browser at `http://127.0.0.1:5000`.
+The app will open automatically in your browser at `http://127.0.0.1:5001`.
 
 ## 📖 How to Use
 

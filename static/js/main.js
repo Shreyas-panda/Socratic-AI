@@ -36,7 +36,63 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Load History
     loadSidebarHistory();
+
+    // Mobile: Close sidebar when clicking a nav item (if on mobile)
+    document.querySelectorAll('.nav-item').forEach(item => {
+        item.addEventListener('click', () => {
+            if (window.innerWidth <= 768) {
+                toggleSidebar();
+            }
+        });
+    });
+
+    // Initialize Sidebar Resizer
+    initSidebarResizer();
 });
+
+function initSidebarResizer() {
+    const resizer = document.querySelector('.resizer');
+    const sidebar = document.querySelector('.sidebar');
+    const root = document.documentElement;
+    let isResizing = false;
+
+    if (!resizer) return;
+
+    resizer.addEventListener('mousedown', (e) => {
+        isResizing = true;
+        document.body.style.cursor = 'col-resize';
+        sidebar.style.transition = 'none'; // Disable transition during drag
+    });
+
+    document.addEventListener('mousemove', (e) => {
+        if (!isResizing) return;
+
+        // Calculate new width
+        let newWidth = e.clientX;
+
+        // Min/Max constraints
+        if (newWidth < 200) newWidth = 200;
+        if (newWidth > 500) newWidth = 500;
+
+        root.style.setProperty('--sidebar-width', `${newWidth}px`);
+    });
+
+    document.addEventListener('mouseup', () => {
+        if (isResizing) {
+            isResizing = false;
+            document.body.style.cursor = 'default';
+            sidebar.style.transition = ''; // Re-enable transition
+        }
+    });
+}
+
+function toggleSidebar() {
+    const sidebar = document.querySelector('.sidebar');
+    const overlay = document.querySelector('.sidebar-overlay');
+
+    sidebar.classList.toggle('mobile-open');
+    overlay.classList.toggle('active');
+}
 
 async function loadSidebarHistory() {
     const listContainer = document.getElementById('history-list');
@@ -134,33 +190,102 @@ async function handleImageUpload(input) {
     const file = input.files[0];
     if (!file) return;
 
-    const originalIcon = input.nextElementSibling.innerHTML;
-    input.nextElementSibling.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
-    input.nextElementSibling.disabled = true;
+    // Validate size (e.g., 5MB)
+    if (file.size > 5 * 1024 * 1024) {
+        alert("File is too large. Max size is 5MB.");
+        input.value = '';
+        return;
+    }
+
+    // Set global file variable
+    window.selectedImageFile = file;
+
+    // Show Preview
+    const reader = new FileReader();
+    reader.onload = function (e) {
+        const previewImg = document.getElementById('preview-img');
+        const previewName = document.getElementById('preview-filename');
+        const previewContainer = document.getElementById('image-preview');
+
+        if (previewImg && previewContainer) {
+            previewImg.src = e.target.result;
+            if (previewName) previewName.innerText = file.name;
+            previewContainer.style.display = 'flex';
+        }
+    };
+    reader.readAsDataURL(file);
+
+    // Reset input value so same file can be selected again if cleared
+    input.value = '';
+}
+
+function clearImage() {
+    window.selectedImageFile = null;
+    const previewContainer = document.getElementById('image-preview');
+    if (previewContainer) {
+        previewContainer.style.display = 'none';
+        document.getElementById('preview-img').src = '';
+    }
+}
+
+async function handleDocumentUpload(input) {
+    const file = input.files[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+        alert("File is too large. Max size is 10MB.");
+        input.value = '';
+        return;
+    }
 
     const formData = new FormData();
-    formData.append('image', file);
-    formData.append('question', "Explain this image to me.");
+    formData.append('document', file);
+
+    const btn = document.getElementById('doc-upload-btn');
+    // Guard against null button
+    if (!btn) {
+        console.error("Upload button not found!");
+        // Continue anyway to try upload, but skip UI spin
+    }
+
+    let originalIcon = '';
+    if (btn) {
+        originalIcon = btn.innerHTML;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i>';
+        btn.disabled = true;
+    }
 
     try {
-        const response = await fetch('/api/upload_image', {
+        console.log("Starting upload...");
+        const response = await fetch('/api/upload_document', {
             method: 'POST',
             body: formData
         });
 
+        console.log("Upload status:", response.status);
         const data = await response.json();
+        console.log("Upload response:", data);
 
         if (data.status === 'success') {
-            window.location.reload();
+            const successMsg = `Document uploaded successfully: ${data.message}`;
+            console.log(successMsg);
+            alert(successMsg);
+            // Optionally show it in UI
+            if (typeof appendMessage === 'function') {
+                appendMessage('assistant', `_I have read **${data.filename}**. You can now ask me questions about it._`);
+            }
         } else {
-            alert('Upload failed: ' + (data.error || 'Unknown error'));
+            console.error("Server returned error:", data.error);
+            alert('Upload failed: ' + (data.error || 'Unknown server error'));
         }
-    } catch (e) {
-        console.error('Image upload failed', e);
-        alert('Failed to upload image');
+    } catch (error) {
+        console.error('Frontend Upload Error:', error);
+        alert('Failed to upload document. See console for details.');
     } finally {
-        input.nextElementSibling.innerHTML = originalIcon;
-        input.nextElementSibling.disabled = false;
+        if (btn) {
+            btn.innerHTML = originalIcon;
+            btn.disabled = false;
+        }
         input.value = '';
     }
 }

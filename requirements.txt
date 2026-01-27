@@ -11,3 +11,8 @@ pydub
 fpdf2>=2.7.0
 Pillow>=10.0.0
 Flask>=3.0.0
+pypdf
+faiss-cpu
+sentence-transformers
+langchain-huggingface
+pillow-heif

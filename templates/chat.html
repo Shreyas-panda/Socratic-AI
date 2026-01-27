@@ -11,7 +11,7 @@
             </p>
         </div>
 
-        <div class="input-container" style="width: 100%; max-width: 600px; margin-bottom: 2rem;">
+        <div class="input-container" style="width: 100%; max-width: 800px; margin-bottom: 2rem;">
             <input type="text" id="subject-input" class="chat-input" placeholder="What sparks your curiosity today?"
                 style="height: auto;">
             <div class="input-actions">
@@ -72,7 +72,7 @@
     <div class="input-area">
         <!-- Quick Action Buttons -->
         <div class="action-buttons"
-            style="max-width: 800px; margin: 0 auto 1rem auto; display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap;">
+            style="max-width: 1000px; margin: 0 auto 1rem auto; display: flex; gap: 0.5rem; justify-content: center; flex-wrap: wrap;">
             <button class="action-chip" onclick="setInputAndSend('Test my knowledge on this')">
                 <i class="fas fa-graduation-cap"></i> Quiz Me
             </button>
@@ -87,21 +87,52 @@
             </button>
         </div>
 
-        <div class="input-container">
-            <textarea id="message-input" class="chat-input" placeholder="Ask a follow-up question..."
-                rows="1"></textarea>
-            <div class="input-actions">
-                <input type="file" id="image-upload" accept="image/*" style="display: none;"
-                    onchange="handleImageUpload(this)">
-                <button class="btn-icon" onclick="document.getElementById('image-upload').click()" title="Upload Image">
-                    <i class="fas fa-image"></i>
+        <div class="input-container" style="flex-direction: column; align-items: stretch; gap: 0;">
+            <!-- Image Preview Area -->
+            <div id="image-preview"
+                style="display: none; padding: 0.75rem; border-bottom: 1px solid var(--border-color); align-items: center; gap: 1rem;">
+                <img id="preview-img" src=""
+                    style="width: 48px; height: 48px; object-fit: cover; border-radius: 8px; border: 1px solid var(--border-color);">
+                <div style="flex: 1; min-width: 0;">
+                    <div id="preview-filename"
+                        style="font-size: 0.85rem; color: var(--text-primary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--text-secondary);">Attached</div>
+                </div>
+                <button onclick="clearImage()" class="btn-icon"
+                    style="width: 32px; height: 32px; color: var(--text-secondary); background: rgba(0,0,0,0.1);">
+                    <i class="fas fa-times"></i>
                 </button>
-                <button class="btn-icon" id="mic-btn" title="Voice Input">
-                    <i class="fas fa-microphone"></i>
-                </button>
-                <button class="btn-icon btn-send" id="send-btn" title="Send">
-                    <i class="fas fa-paper-plane"></i>
-                </button>
+            </div>
+
+            <div style="display: flex; align-items: center; gap: 0.75rem; width: 100%; padding: 0.75rem;">
+                <textarea id="message-input" class="chat-input" placeholder="Ask a follow-up question..."
+                    rows="1"></textarea>
+                <div class="input-actions">
+                    <input type="file" id="image-upload" accept="image/*" style="display: none;"
+                        onchange="handleImageUpload(this)">
+                    <button class="btn-icon" onclick="document.getElementById('image-upload').click()"
+                        title="Upload Image">
+                        <i class="fas fa-image"></i>
+                    </button>
+                    <!-- Document Upload -->
+                    <input type="file" id="document-upload" accept=".pdf,.txt,.md" style="display: none;"
+                        onchange="handleDocumentUpload(this)">
+                    <button class="btn-icon" id="doc-upload-btn"
+                        onclick="document.getElementById('document-upload').click()" title="Upload Document (PDF/Text)">
+                        <i class="fas fa-file-alt"></i>
+                    </button>
+                    <button class="btn-icon" id="mic-btn" title="Voice Input">
+                        <i class="fas fa-microphone"></i>
+                    </button>
+                    <button class="btn-icon btn-send" id="send-btn" title="Send">
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                    <button class="btn-icon btn-stop" id="stop-btn" title="Stop Generation"
+                        style="display: none; color: #ef4444;">
+                        <i class="fas fa-stop-circle"></i>
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -125,9 +156,109 @@
         }
     }
 
+    // Initialize Highlight.js & KaTeX
+    document.addEventListener('DOMContentLoaded', () => {
+        // Initial render for existing history
+        // Initial render for existing history
+        document.querySelectorAll('.message-content[data-content]').forEach(el => {
+            const raw = el.getAttribute('data-content');
+            // Check parent role
+            const role = el.closest('.message').classList.contains('assistant') ? 'assistant' : 'user';
+
+            if (role === 'assistant' && !el.querySelector('.message-header')) {
+                // Add TTS Header to existing messages
+                const header = document.createElement('div');
+                header.className = 'message-header';
+                header.style.display = 'flex';
+                header.style.justifyContent = 'space-between';
+                header.style.alignItems = 'center';
+                header.style.marginBottom = '0.5rem';
+
+                const roleLabel = document.createElement('span');
+                roleLabel.style.fontWeight = 'bold';
+                roleLabel.style.fontSize = '0.8rem';
+                roleLabel.innerHTML = 'AI Tutor <i class="fas fa-robot" style="margin-left:5px;"></i>';
+
+                const ttsBtn = document.createElement('button');
+                ttsBtn.className = 'btn-icon tts-btn';
+                ttsBtn.style.padding = '4px 8px';
+                ttsBtn.style.fontSize = '0.9rem';
+                ttsBtn.title = 'Read Aloud';
+                ttsBtn.innerHTML = '<i class="fas fa-volume-up"></i>';
+                ttsBtn.onclick = () => {
+                    const cleanText = raw.replace(/[#*`_]/g, '');
+                    toggleSpeech(cleanText, ttsBtn);
+                };
+
+                header.appendChild(roleLabel);
+                header.appendChild(ttsBtn);
+                el.insertBefore(header, el.firstChild);
+            }
+
+            if (typeof marked !== 'undefined' && raw) {
+                // Create a div for text content to separate from header
+                const textDiv = document.createElement('div');
+                textDiv.innerHTML = marked.parse(raw);
+                el.appendChild(textDiv);
+                renderRichContent(textDiv);
+            } else {
+                const textDiv = document.createElement('div');
+                textDiv.textContent = raw || '';
+                el.appendChild(textDiv);
+            }
+        });
+    });
+
+    function renderRichContent(element) {
+        // 1. Syntax Highlight
+        element.querySelectorAll('pre code').forEach((block) => {
+            hljs.highlightElement(block);
+        });
+
+        // 2. Math Rendering
+        if (typeof renderMathInElement !== 'undefined') {
+            renderMathInElement(element, {
+                delimiters: [
+                    { left: '$$', right: '$$', display: true },
+                    { left: '$', right: '$', display: false },
+                    { left: '\\(', right: '\\)', display: false },
+                    { left: '\\[', right: '\\]', display: true }
+                ],
+                throwOnError: false
+            });
+        }
+
+        // 3. Copy Buttons
+        addCopyButtons(element);
+    }
+
+    function addCopyButtons(element) {
+        element.querySelectorAll('pre').forEach(pre => {
+            if (pre.querySelector('.copy-btn')) return;
+
+            const btn = document.createElement('button');
+            btn.className = 'copy-btn';
+            btn.innerHTML = '<i class="fas fa-copy"></i> Copy';
+
+            btn.addEventListener('click', async () => {
+                const code = pre.querySelector('code').innerText;
+                try {
+                    await navigator.clipboard.writeText(code);
+                    btn.innerHTML = '<i class="fas fa-check"></i>';
+                    setTimeout(() => btn.innerHTML = '<i class="fas fa-copy"></i> Copy', 2000);
+                } catch (err) {
+                    console.error('Failed to copy!', err);
+                }
+            });
+
+            pre.appendChild(btn);
+        });
+    }
+
     document.addEventListener('DOMContentLoaded', () => {
         const startBtn = document.getElementById('start-btn');
         const sendBtn = document.getElementById('send-btn');
+        const stopBtn = document.getElementById('stop-btn');
         const messageInput = document.getElementById('message-input');
         const subjectInput = document.getElementById('subject-input');
         const chatHistory = document.getElementById('chat-history');
@@ -144,12 +275,19 @@
                 subjectInput.disabled = true;
 
                 try {
+                    // Get selected language
+                    const languageSelect = document.getElementById('language-select');
+                    const language = languageSelect ? languageSelect.value : 'English';
+
                     const response = await fetch('/api/start_tutorial', {
                         method: 'POST',
                         headers: {
                             'Content-Type': 'application/json'
                         },
-                        body: JSON.stringify({ subject: subject })
+                        body: JSON.stringify({
+                            subject: subject,
+                            language: language
+                        })
                     });
 
                     const data = await response.json();
@@ -186,30 +324,116 @@
             });
         }
 
+        // Global AbortController
+        let currentController = null;
+
+
+        function toggleLoadingState(isLoading) {
+            if (isLoading) {
+                sendBtn.style.display = 'none';
+                stopBtn.style.display = 'flex';
+                messageInput.disabled = true;
+            } else {
+                sendBtn.style.display = 'flex';
+                stopBtn.style.display = 'none';
+                messageInput.disabled = false;
+                messageInput.focus();
+            }
+        }
+
+        if (stopBtn) {
+            stopBtn.addEventListener('click', () => {
+                if (currentController) {
+                    currentController.abort();
+                    currentController = null;
+                    // UI cleanup handled in catch block
+                }
+            });
+        }
+
         // Send Message
         if (sendBtn && messageInput) {
             const sendMessage = async () => {
                 const text = messageInput.value.trim();
-                if (!text) return;
+                const imageFile = window.selectedImageFile;
 
-                // Optimistically append user message
-                appendMessage('user', text);
+                if (!text && !imageFile) return;
+
+                // Optimistically append user message (with image indicator if present)
+                let displayText = text;
+                if (imageFile) {
+                    displayText = `[Image Uploaded] ${text}`;
+                }
+                appendMessage('user', displayText);
+
                 messageInput.value = '';
                 messageInput.style.height = 'auto'; // Reset height
 
+                // Clear image selection immediately from UI
+                if (imageFile) clearImage();
+
+                // Show typing indicator
+                showTypingIndicator();
+                toggleLoadingState(true); // START LOADING
+
+                // Create new AbortController
+                currentController = new AbortController();
+                const signal = currentController.signal;
+
                 try {
-                    const response = await fetch('/api/message', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ message: text })
-                    });
+                    const languageSelect = document.getElementById('language-select');
+                    const language = languageSelect ? languageSelect.value : 'English';
+
+                    let response;
+
+                    if (imageFile) {
+                        // Multipart Send
+                        const formData = new FormData();
+                        formData.append('message', text); // Text prompt
+                        formData.append('language', language);
+                        formData.append('image', imageFile);
+
+                        response = await fetch('/api/message', {
+                            method: 'POST',
+                            body: formData,
+                            signal: signal
+                        });
+                    } else {
+                        // JSON Send
+                        response = await fetch('/api/message', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                message: text,
+                                language: language
+                            }),
+                            signal: signal
+                        });
+                    }
 
                     const data = await response.json();
+
+                    // Remove typing indicator before showing response
+                    removeTypingIndicator();
+
                     if (data.response) {
                         appendMessage('assistant', data.response);
+                    } else if (data.error) {
+                        appendMessage('assistant', `⚠️ **Error:** ${data.error}`);
                     }
                 } catch (error) {
-                    console.error('Error:', error);
+                    removeTypingIndicator();
+
+                    if (error.name === 'AbortError') {
+                        console.log('Generation stopped by user');
+                        appendMessage('assistant', '_Generation stopped by user._');
+                    } else {
+                        console.error('Error:', error);
+                        appendMessage('assistant', "⚠️ **Network Error:** Failed to send message.");
+                    }
+                } finally {
+                    toggleLoadingState(false); // END LOADING
+                    currentController = null;
                 }
             };
 
@@ -220,6 +444,28 @@
                     sendMessage();
                 }
             });
+        }
+
+        function showTypingIndicator() {
+            if (document.getElementById('typing-indicator')) return;
+
+            const indicator = document.createElement('div');
+            indicator.id = 'typing-indicator';
+            indicator.className = 'typing-indicator';
+            indicator.innerHTML = `
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+                <div class="typing-dot"></div>
+            `;
+            chatHistory.appendChild(indicator);
+            scrollToBottom();
+        }
+
+        function removeTypingIndicator() {
+            const indicator = document.getElementById('typing-indicator');
+            if (indicator) {
+                indicator.remove();
+            }
         }
 
         function appendMessage(role, text) {
@@ -233,12 +479,46 @@
             const content = document.createElement('div');
             content.className = 'message-content markdown-body';
 
-            // USE MARKED to parse markdown
-            if (typeof marked !== 'undefined') {
-                content.innerHTML = marked.parse(text);
-            } else {
-                content.textContent = text;
+            // Add TTS Button for Assistant
+            if (role === 'assistant') {
+                const header = document.createElement('div');
+                header.className = 'message-header';
+                header.style.display = 'flex';
+                header.style.justifyContent = 'space-between';
+                header.style.alignItems = 'center';
+                header.style.marginBottom = '0.5rem';
+
+                const roleLabel = document.createElement('span');
+                roleLabel.style.fontWeight = 'bold';
+                roleLabel.style.fontSize = '0.8rem';
+                roleLabel.innerHTML = 'AI Tutor <i class="fas fa-robot" style="margin-left:5px;"></i>';
+
+                const ttsBtn = document.createElement('button');
+                ttsBtn.className = 'btn-icon tts-btn';
+                ttsBtn.style.padding = '4px 8px';
+                ttsBtn.style.fontSize = '0.9rem';
+                ttsBtn.title = 'Read Aloud';
+                ttsBtn.innerHTML = '<i class="fas fa-volume-up"></i>';
+                ttsBtn.onclick = () => {
+                    // Strip markdown for speech
+                    const cleanText = text.replace(/[#*`_]/g, '');
+                    toggleSpeech(cleanText, ttsBtn);
+                };
+
+                header.appendChild(roleLabel);
+                header.appendChild(ttsBtn);
+                content.appendChild(header);
             }
+
+            // USE MARKED to parse markdown
+            const textDiv = document.createElement('div');
+            if (typeof marked !== 'undefined') {
+                textDiv.innerHTML = marked.parse(text);
+                renderRichContent(textDiv);
+            } else {
+                textDiv.textContent = text;
+            }
+            content.appendChild(textDiv);
 
             msgDiv.appendChild(avatar);
             msgDiv.appendChild(content);
@@ -246,16 +526,7 @@
             scrollToBottom();
         }
 
-        // Render existing history markdown
-        document.querySelectorAll('.message-content[data-content]').forEach(el => {
-            const raw = el.getAttribute('data-content');
-            if (typeof marked !== 'undefined' && raw) {
-                el.innerHTML = marked.parse(raw);
-            } else {
-                el.textContent = raw || '';
-            }
-        });
-
+        // Render existing history markdown (MOVED TO TOP DOMContentLoaded)
         function scrollToBottom() {
             if (chatHistory) {
                 chatHistory.scrollTop = chatHistory.scrollHeight;
