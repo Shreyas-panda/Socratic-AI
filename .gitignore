@@ -4,3 +4,6 @@ __pycache__/
 .DS_Store
 uploaded_images/
 .env
+rag_index/
+faiss_index/
+database/
