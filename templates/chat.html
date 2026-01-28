@@ -11,13 +11,52 @@
             </p>
         </div>
 
-        <div class="input-container" style="width: 100%; max-width: 800px; margin-bottom: 2rem;">
-            <input type="text" id="subject-input" class="chat-input" placeholder="What sparks your curiosity today?"
-                style="height: auto;">
-            <div class="input-actions">
-                <button class="btn-icon btn-send" id="start-btn">
-                    <i class="fas fa-arrow-right"></i>
+        <div class="input-container home-input-container" style="width: 100%; max-width: 800px; margin-bottom: 2rem;">
+            <!-- Hidden file inputs -->
+            <input type="file" id="home-image-upload" accept="image/*" style="display: none;"
+                onchange="handleHomeImageUpload(this)">
+            <input type="file" id="home-document-upload" accept=".pdf,.txt,.md" style="display: none;"
+                onchange="handleHomeDocumentUpload(this)">
+
+            <!-- Image/Document Preview Area -->
+            <div id="home-preview" class="home-preview-area" style="display: none;">
+                <div id="home-preview-content" class="preview-info">
+                    <i id="home-preview-icon" class="fas fa-file"></i>
+                    <span id="home-preview-name">file.pdf</span>
+                </div>
+                <button onclick="clearHomePreview()" class="btn-icon btn-close-preview">
+                    <i class="fas fa-times"></i>
                 </button>
+            </div>
+
+            <!-- Expandable Textarea -->
+            <textarea id="subject-input" class="chat-input home-chat-input"
+                placeholder="What sparks your curiosity today?" rows="1"></textarea>
+
+            <!-- Bottom Action Bar -->
+            <div class="input-action-bar home-action-bar">
+                <div class="input-actions-left">
+                    <button class="btn-action" onclick="document.getElementById('home-image-upload').click()"
+                        title="Upload Image">
+                        <i class="fas fa-image"></i>
+                    </button>
+                    <button class="btn-action" onclick="document.getElementById('home-document-upload').click()"
+                        title="Upload Document for RAG">
+                        <i class="fas fa-file-alt"></i>
+                    </button>
+                    <button class="btn-action" onclick="showKnowledgeBase()" title="View Knowledge Base"
+                        id="kb-viewer-btn">
+                        <i class="fas fa-database"></i>
+                    </button>
+                    <button class="btn-action" id="home-expand-btn" onclick="toggleHomeExpand()" title="Expand Input">
+                        <i class="fas fa-expand-alt"></i>
+                    </button>
+                </div>
+                <div class="input-actions-right">
+                    <button class="btn-send-modern" id="start-btn" title="Start Learning">
+                        <i class="fas fa-arrow-right"></i>
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -40,6 +79,7 @@
             </div>
         </div>
     </div>
+
     {% else %}
     <!-- Chat Interface -->
     <div class="chat-header">
@@ -100,9 +140,15 @@
                 </button>
             </div>
 
+            <!-- Tagged Files Preview Area -->
+            <div id="tagged-files-preview" class="tagged-files-preview" style="display: none;"></div>
+
             <!-- Text Input Area -->
-            <textarea id="message-input" class="chat-input" placeholder="Ask a follow-up question..."
-                rows="1"></textarea>
+            <textarea id="message-input" class="chat-input"
+                placeholder="Ask a follow-up question... (use @ to reference files)" rows="1"></textarea>
+
+            <!-- @ Mention Autocomplete Dropdown -->
+            <div id="mention-dropdown" class="mention-dropdown" style="display: none;"></div>
 
             <!-- Bottom Action Bar -->
             <div class="input-action-bar">
@@ -119,6 +165,10 @@
                     <button class="btn-action" id="doc-upload-btn"
                         onclick="document.getElementById('document-upload').click()" title="Upload Document">
                         <i class="fas fa-file-alt"></i>
+                    </button>
+
+                    <button class="btn-action" onclick="showKnowledgeBase()" title="View Knowledge Base">
+                        <i class="fas fa-database"></i>
                     </button>
 
                     <button class="btn-action" id="clear-kb-btn" onclick="clearKnowledgeBase()"
@@ -145,7 +195,363 @@
     {% endif %}
 </div>
 
+<!-- Knowledge Base Modal -->
+<div id="kb-modal" class="modal" style="display: none;">
+    <div class="modal-content kb-modal-content">
+        <div class="modal-header">
+            <h3><i class="fas fa-database"></i> Knowledge Base</h3>
+            <button class="btn-icon" onclick="closeKnowledgeBaseModal()"><i class="fas fa-times"></i></button>
+        </div>
+        <div class="modal-body" id="kb-modal-body">
+            <div class="kb-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>
+        </div>
+        <div class="modal-footer">
+            <button class="btn-danger" onclick="clearKnowledgeBaseFromModal()">
+                <i class="fas fa-trash"></i> Clear All
+            </button>
+            <button class="btn-secondary" onclick="closeKnowledgeBaseModal()">Close</button>
+        </div>
+    </div>
+</div>
+
+<style>
+    .modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.7);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        z-index: 1000;
+    }
+
+    .modal-content {
+        background: var(--surface-color);
+        border-radius: 12px;
+        width: 90%;
+        max-width: 600px;
+        max-height: 80vh;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .modal-header {
+        padding: 1rem 1.5rem;
+        border-bottom: 1px solid var(--border-color);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+    .modal-header h3 {
+        margin: 0;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .modal-body {
+        padding: 1.5rem;
+        overflow-y: auto;
+        flex: 1;
+    }
+
+    .modal-footer {
+        padding: 1rem 1.5rem;
+        border-top: 1px solid var(--border-color);
+        display: flex;
+        gap: 0.5rem;
+        justify-content: flex-end;
+    }
+
+    .kb-empty {
+        text-align: center;
+        padding: 2rem;
+        color: var(--text-muted);
+    }
+
+    .kb-empty i {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+        opacity: 0.5;
+    }
+
+    .kb-document-list {
+        display: flex;
+        flex-direction: column;
+        gap: 0.75rem;
+    }
+
+    .kb-document-item {
+        background: var(--surface-hover);
+        padding: 1rem;
+        border-radius: 8px;
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+    }
+
+    .kb-document-item i {
+        font-size: 1.5rem;
+        color: var(--primary-color);
+    }
+
+    .kb-document-info {
+        flex: 1;
+    }
+
+    .kb-document-name {
+        font-weight: 600;
+        margin-bottom: 0.25rem;
+    }
+
+    .kb-document-meta {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+    }
+
+    .kb-stats {
+        display: flex;
+        gap: 1rem;
+        margin-bottom: 1rem;
+        padding: 1rem;
+        background: var(--surface-hover);
+        border-radius: 8px;
+    }
+
+    .kb-stat {
+        flex: 1;
+        text-align: center;
+    }
+
+    .kb-stat-value {
+        font-size: 1.5rem;
+        font-weight: bold;
+        color: var(--primary-color);
+    }
+
+    .kb-stat-label {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+    }
+
+    .btn-danger {
+        background: #dc3545;
+        color: white;
+        border: none;
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 0.5rem;
+    }
+
+    .btn-danger:hover {
+        background: #c82333;
+    }
+
+    .btn-secondary {
+        background: var(--surface-hover);
+        color: var(--text-color);
+        border: 1px solid var(--border-color);
+        padding: 0.5rem 1rem;
+        border-radius: 6px;
+        cursor: pointer;
+    }
+
+    .btn-secondary:hover {
+        background: var(--border-color);
+    }
+
+    .kb-loading {
+        text-align: center;
+        padding: 2rem;
+        color: var(--text-muted);
+    }
+
+    /* @ Mention Autocomplete Styles */
+    .mention-dropdown {
+        position: absolute;
+        bottom: 100%;
+        left: 0;
+        right: 0;
+        max-height: 200px;
+        overflow-y: auto;
+        background: var(--surface-color);
+        border: 1px solid var(--border-color);
+        border-radius: 8px;
+        box-shadow: 0 -4px 16px rgba(0, 0, 0, 0.2);
+        z-index: 100;
+        margin-bottom: 8px;
+    }
+
+    .mention-item {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        padding: 0.75rem 1rem;
+        cursor: pointer;
+        transition: background 0.15s ease;
+    }
+
+    .mention-item:hover,
+    .mention-item.active {
+        background: var(--surface-hover);
+    }
+
+    .mention-item i {
+        color: var(--primary-color);
+        font-size: 1.1rem;
+    }
+
+    .mention-item-name {
+        flex: 1;
+        font-weight: 500;
+    }
+
+    .mention-item-meta {
+        font-size: 0.8rem;
+        color: var(--text-muted);
+    }
+
+    .mention-empty {
+        padding: 1rem;
+        text-align: center;
+        color: var(--text-muted);
+        font-size: 0.9rem;
+    }
+
+    .mention-hint {
+        padding: 0.5rem 1rem;
+        font-size: 0.75rem;
+        color: var(--text-muted);
+        border-bottom: 1px solid var(--border-color);
+        background: var(--surface-hover);
+    }
+
+    /* Tagged Files Preview */
+    .tagged-files-preview {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        padding: 0.75rem;
+        background: var(--surface-hover);
+        border-radius: 8px 8px 0 0;
+        border: 1px solid var(--border-color);
+        border-bottom: none;
+    }
+
+    .tagged-file {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        padding: 0.35rem 0.6rem;
+        background: linear-gradient(135deg, var(--primary-color), var(--accent-primary));
+        color: white;
+        border-radius: 4px;
+        font-size: 0.8rem;
+        font-weight: 500;
+    }
+
+    .tagged-file i {
+        opacity: 0.9;
+    }
+
+    .tagged-file .remove-tag {
+        cursor: pointer;
+        opacity: 0.7;
+        transition: opacity 0.15s;
+        padding: 2px;
+    }
+
+    .tagged-file .remove-tag:hover {
+        opacity: 1;
+    }
+</style>
+
 <script>
+    // Knowledge Base Modal Functions
+    async function showKnowledgeBase() {
+        const modal = document.getElementById('kb-modal');
+        const body = document.getElementById('kb-modal-body');
+        modal.style.display = 'flex';
+        body.innerHTML = '<div class="kb-loading"><i class="fas fa-spinner fa-spin"></i> Loading...</div>';
+
+        try {
+            const response = await fetch('/api/knowledge_base');
+            const data = await response.json();
+
+            if (!data.has_content || data.documents.length === 0) {
+                body.innerHTML = `
+                    <div class="kb-empty">
+                        <i class="fas fa-folder-open"></i>
+                        <p>No documents in knowledge base</p>
+                        <p style="font-size: 0.9rem;">Upload PDF or TXT files to add context for your learning sessions.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            let html = `
+                <div class="kb-stats">
+                    <div class="kb-stat">
+                        <div class="kb-stat-value">${data.total_documents}</div>
+                        <div class="kb-stat-label">Documents</div>
+                    </div>
+                    <div class="kb-stat">
+                        <div class="kb-stat-value">${data.total_chunks}</div>
+                        <div class="kb-stat-label">Knowledge Chunks</div>
+                    </div>
+                </div>
+                <div class="kb-document-list">
+            `;
+
+            for (const doc of data.documents) {
+                const icon = doc.filename.endsWith('.pdf') ? 'fa-file-pdf' : 'fa-file-alt';
+                const date = new Date(doc.uploaded_at).toLocaleDateString();
+                html += `
+                    <div class="kb-document-item">
+                        <i class="fas ${icon}"></i>
+                        <div class="kb-document-info">
+                            <div class="kb-document-name">${doc.filename}</div>
+                            <div class="kb-document-meta">${doc.chunks} chunks • Uploaded ${date}</div>
+                        </div>
+                    </div>
+                `;
+            }
+            html += '</div>';
+            body.innerHTML = html;
+
+        } catch (error) {
+            body.innerHTML = `<div class="kb-empty"><i class="fas fa-exclamation-triangle"></i><p>Error loading knowledge base</p></div>`;
+        }
+    }
+
+    function closeKnowledgeBaseModal() {
+        document.getElementById('kb-modal').style.display = 'none';
+    }
+
+    async function clearKnowledgeBaseFromModal() {
+        if (!confirm('Are you sure you want to clear all documents from the knowledge base?')) return;
+
+        try {
+            await fetch('/api/knowledge_base', { method: 'DELETE' });
+            showKnowledgeBase(); // Refresh the modal
+        } catch (error) {
+            alert('Error clearing knowledge base');
+        }
+    }
+
+    // Close modal on background click
+    document.getElementById('kb-modal')?.addEventListener('click', function (e) {
+        if (e.target === this) closeKnowledgeBaseModal();
+    });
+
     // Include the startSubject function globally so onclick="" works
     function startSubject(subject) {
         document.getElementById('subject-input').value = subject;
@@ -161,6 +567,345 @@
             sendBtn.click();
         }
     }
+
+    // ========================================
+    // @ Mention Autocomplete System
+    // ========================================
+    window.taggedFiles = []; // Stores tagged file names
+    window.kbFiles = []; // Cached knowledge base files
+    window.mentionActive = false;
+    window.mentionStartPos = -1;
+    window.activeMentionIndex = 0;
+
+    // Fetch knowledge base files
+    async function fetchKBFiles() {
+        try {
+            const response = await fetch('/api/knowledge_base');
+            const data = await response.json();
+            if (data.documents && data.documents.length > 0) {
+                window.kbFiles = data.documents;
+            } else {
+                window.kbFiles = [];
+            }
+        } catch (error) {
+            console.error('Error fetching KB files:', error);
+            window.kbFiles = [];
+        }
+    }
+
+    // Initialize @ mention on message input
+    function initMentionAutocomplete() {
+        const input = document.getElementById('message-input');
+        const dropdown = document.getElementById('mention-dropdown');
+
+        if (!input || !dropdown) return;
+
+        // Fetch KB files initially
+        fetchKBFiles();
+
+        // Listen for input changes
+        input.addEventListener('input', handleMentionInput);
+        input.addEventListener('keydown', handleMentionKeydown);
+
+        // Close dropdown on click outside
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.mention-dropdown') && e.target !== input) {
+                closeMentionDropdown();
+            }
+        });
+    }
+
+    function handleMentionInput(e) {
+        const input = e.target;
+        const value = input.value;
+        const cursorPos = input.selectionStart;
+
+        // Find the @ symbol before cursor
+        let atPos = -1;
+        for (let i = cursorPos - 1; i >= 0; i--) {
+            if (value[i] === '@') {
+                atPos = i;
+                break;
+            }
+            // Stop if we hit a space (not in a mention)
+            if (value[i] === ' ' || value[i] === '\n') break;
+        }
+
+        if (atPos >= 0) {
+            const query = value.substring(atPos + 1, cursorPos).toLowerCase();
+            window.mentionActive = true;
+            window.mentionStartPos = atPos;
+            showMentionDropdown(query);
+        } else {
+            closeMentionDropdown();
+        }
+    }
+
+    function handleMentionKeydown(e) {
+        if (!window.mentionActive) return;
+
+        const dropdown = document.getElementById('mention-dropdown');
+        const items = dropdown.querySelectorAll('.mention-item');
+
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            window.activeMentionIndex = Math.min(window.activeMentionIndex + 1, items.length - 1);
+            updateActiveMention(items);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            window.activeMentionIndex = Math.max(window.activeMentionIndex - 1, 0);
+            updateActiveMention(items);
+        } else if (e.key === 'Enter' && items.length > 0) {
+            e.preventDefault();
+            const activeItem = items[window.activeMentionIndex];
+            if (activeItem) {
+                selectMention(activeItem.dataset.filename);
+            }
+        } else if (e.key === 'Escape') {
+            closeMentionDropdown();
+        }
+    }
+
+    function updateActiveMention(items) {
+        items.forEach((item, idx) => {
+            item.classList.toggle('active', idx === window.activeMentionIndex);
+        });
+        // Scroll into view
+        if (items[window.activeMentionIndex]) {
+            items[window.activeMentionIndex].scrollIntoView({ block: 'nearest' });
+        }
+    }
+
+    function showMentionDropdown(query) {
+        const dropdown = document.getElementById('mention-dropdown');
+
+        // Refresh KB files if empty
+        if (window.kbFiles.length === 0) {
+            fetchKBFiles();
+        }
+
+        // Filter files based on query
+        const filtered = window.kbFiles.filter(doc =>
+            doc.filename.toLowerCase().includes(query) &&
+            !window.taggedFiles.includes(doc.filename)
+        );
+
+        window.activeMentionIndex = 0;
+
+        if (window.kbFiles.length === 0) {
+            dropdown.innerHTML = `
+                <div class="mention-empty">
+                    <i class="fas fa-folder-open"></i>
+                    <p>No files in knowledge base</p>
+                </div>
+            `;
+        } else if (filtered.length === 0) {
+            dropdown.innerHTML = `
+                <div class="mention-empty">
+                    <p>No matching files found</p>
+                </div>
+            `;
+        } else {
+            let html = '<div class="mention-hint">Select a file to reference</div>';
+            filtered.forEach((doc, idx) => {
+                const icon = doc.filename.endsWith('.pdf') ? 'fa-file-pdf' : 'fa-file-alt';
+                html += `
+                    <div class="mention-item ${idx === 0 ? 'active' : ''}" 
+                         data-filename="${doc.filename}"
+                         onclick="selectMention('${doc.filename}')">
+                        <i class="fas ${icon}"></i>
+                        <span class="mention-item-name">${doc.filename}</span>
+                        <span class="mention-item-meta">${doc.chunks} chunks</span>
+                    </div>
+                `;
+            });
+            dropdown.innerHTML = html;
+        }
+
+        dropdown.style.display = 'block';
+    }
+
+    function closeMentionDropdown() {
+        const dropdown = document.getElementById('mention-dropdown');
+        if (dropdown) {
+            dropdown.style.display = 'none';
+        }
+        window.mentionActive = false;
+        window.mentionStartPos = -1;
+    }
+
+    function selectMention(filename) {
+        const input = document.getElementById('message-input');
+        const value = input.value;
+
+        // Remove the @query from input
+        const before = value.substring(0, window.mentionStartPos);
+        const after = value.substring(input.selectionStart);
+        input.value = before + after;
+        input.selectionStart = input.selectionEnd = before.length;
+
+        // Add to tagged files
+        if (!window.taggedFiles.includes(filename)) {
+            window.taggedFiles.push(filename);
+            updateTaggedFilesPreview();
+        }
+
+        closeMentionDropdown();
+        input.focus();
+    }
+
+    function updateTaggedFilesPreview() {
+        const preview = document.getElementById('tagged-files-preview');
+        if (!preview) return;
+
+        if (window.taggedFiles.length === 0) {
+            preview.style.display = 'none';
+            return;
+        }
+
+        let html = '';
+        window.taggedFiles.forEach(filename => {
+            const icon = filename.endsWith('.pdf') ? 'fa-file-pdf' : 'fa-file-alt';
+            html += `
+                <div class="tagged-file">
+                    <i class="fas ${icon}"></i>
+                    <span>${filename}</span>
+                    <span class="remove-tag" onclick="removeTaggedFile('${filename}')">
+                        <i class="fas fa-times"></i>
+                    </span>
+                </div>
+            `;
+        });
+
+        preview.innerHTML = html;
+        preview.style.display = 'flex';
+    }
+
+    function removeTaggedFile(filename) {
+        window.taggedFiles = window.taggedFiles.filter(f => f !== filename);
+        updateTaggedFilesPreview();
+    }
+
+    function clearTaggedFiles() {
+        window.taggedFiles = [];
+        updateTaggedFilesPreview();
+    }
+
+    // Refresh KB files when document is uploaded
+    function refreshKBAfterUpload() {
+        fetchKBFiles();
+    }
+
+    // Initialize mention system on page load
+    document.addEventListener('DOMContentLoaded', initMentionAutocomplete);
+
+    // Home page file storage
+    window.homeImageFile = null;
+    window.homeDocumentFile = null;
+    window.homeExpanded = false;
+
+    // Handle image upload on home page
+    function handleHomeImageUpload(input) {
+        if (input.files && input.files[0]) {
+            const file = input.files[0];
+            window.homeImageFile = file;
+
+            // Show preview
+            const preview = document.getElementById('home-preview');
+            const icon = document.getElementById('home-preview-icon');
+            const name = document.getElementById('home-preview-name');
+
+            icon.className = 'fas fa-image';
+            icon.style.color = 'var(--accent-primary)';
+            name.textContent = file.name;
+            preview.style.display = 'flex';
+        }
+    }
+
+    // Handle document upload on home page
+    function handleHomeDocumentUpload(input) {
+        if (input.files && input.files[0]) {
+            const file = input.files[0];
+            window.homeDocumentFile = file;
+
+            // Show preview
+            const preview = document.getElementById('home-preview');
+            const icon = document.getElementById('home-preview-icon');
+            const name = document.getElementById('home-preview-name');
+
+            icon.className = 'fas fa-file-pdf';
+            icon.style.color = 'var(--accent-secondary)';
+            name.textContent = file.name;
+            preview.style.display = 'flex';
+
+            // Upload document to RAG immediately
+            uploadHomeDocument(file);
+        }
+    }
+
+    // Upload document to RAG system
+    async function uploadHomeDocument(file) {
+        const formData = new FormData();
+        formData.append('document', file);
+
+        try {
+            const response = await fetch('/api/upload_document', {
+                method: 'POST',
+                body: formData
+            });
+            const data = await response.json();
+            if (data.status === 'success') {
+                const name = document.getElementById('home-preview-name');
+                name.textContent = file.name + ' ✓ (Added to knowledge base)';
+            }
+        } catch (error) {
+            console.error('Upload error:', error);
+        }
+    }
+
+    // Clear home preview
+    function clearHomePreview() {
+        window.homeImageFile = null;
+        window.homeDocumentFile = null;
+        document.getElementById('home-preview').style.display = 'none';
+        document.getElementById('home-image-upload').value = '';
+        document.getElementById('home-document-upload').value = '';
+    }
+
+    // Toggle expand/collapse of home input
+    function toggleHomeExpand() {
+        const input = document.getElementById('subject-input');
+        const btn = document.getElementById('home-expand-btn');
+
+        window.homeExpanded = !window.homeExpanded;
+
+        if (window.homeExpanded) {
+            input.style.minHeight = '150px';
+            input.rows = 6;
+            btn.innerHTML = '<i class="fas fa-compress-alt"></i>';
+            btn.title = 'Collapse Input';
+        } else {
+            input.style.minHeight = 'auto';
+            input.rows = 1;
+            btn.innerHTML = '<i class="fas fa-expand-alt"></i>';
+            btn.title = 'Expand Input';
+        }
+        input.focus();
+    }
+
+    // Auto-resize textarea as user types
+    document.addEventListener('DOMContentLoaded', () => {
+        const subjectInput = document.getElementById('subject-input');
+        if (subjectInput && subjectInput.tagName === 'TEXTAREA') {
+            subjectInput.addEventListener('input', function () {
+                if (!window.homeExpanded) {
+                    this.style.height = 'auto';
+                    this.style.height = Math.min(this.scrollHeight, 150) + 'px';
+                }
+            });
+        }
+    });
+
 
     // Text-to-Speech function
     let currentUtterance = null;
@@ -395,21 +1140,27 @@
             const sendMessage = async () => {
                 const text = messageInput.value.trim();
                 const imageFile = window.selectedImageFile;
+                const taggedFiles = [...window.taggedFiles]; // Copy tagged files
 
-                if (!text && !imageFile) return;
+                if (!text && !imageFile && taggedFiles.length === 0) return;
 
-                // Optimistically append user message (with image indicator if present)
+                // Optimistically append user message (with file/image indicators)
                 let displayText = text;
+                if (taggedFiles.length > 0) {
+                    const fileLabels = taggedFiles.map(f => `📄 ${f}`).join(', ');
+                    displayText = `[Referencing: ${fileLabels}] ${text}`;
+                }
                 if (imageFile) {
-                    displayText = `[Image Uploaded] ${text}`;
+                    displayText = `[Image Uploaded] ${displayText}`;
                 }
                 appendMessage('user', displayText);
 
                 messageInput.value = '';
                 messageInput.style.height = 'auto'; // Reset height
 
-                // Clear image selection immediately from UI
+                // Clear image selection and tagged files immediately from UI
                 if (imageFile) clearImage();
+                clearTaggedFiles();
 
                 // Show typing indicator
                 showTypingIndicator();
@@ -444,7 +1195,8 @@
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 message: text,
-                                language: language
+                                language: language,
+                                tagged_files: taggedFiles
                             }),
                             signal: signal
                         });

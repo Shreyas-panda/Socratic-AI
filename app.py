@@ -43,15 +43,59 @@ db = TutorialDatabase()
 agent = TutorialAgent()
 rag_engine = RAGEngine()
 
+def detect_topic(user_input: str, tagged_files: list = None) -> str:
+    """
+    Detect the topic/subject of a user's message using LLM.
+    Returns a short topic label (2-5 words).
+    """
+    from LLM_api import client, DEFAULT_MODEL
+    
+    # Skip topic detection for very short messages
+    if len(user_input.split()) < 3:
+        return None
+    
+    file_context = ""
+    if tagged_files:
+        file_context = f"Referenced files: {', '.join(tagged_files)}"
+    
+    prompt = f"""Extract the main topic/subject from this student message in 2-5 words.
+Return ONLY the topic label, nothing else.
+
+{file_context}
+Student message: "{user_input}"
+
+Examples:
+- "What is photosynthesis?" → "Photosynthesis"
+- "Tell me about Python loops" → "Python Loops"
+- "How does gravity work?" → "Gravity / Physics"
+- "Explain machine learning" → "Machine Learning"
+
+Topic:"""
+
+    try:
+        completion = client.chat.completions.create(
+            model=DEFAULT_MODEL,
+            messages=[{"role": "user", "content": prompt}],
+            max_tokens=20
+        )
+        if completion and completion.choices:
+            topic = completion.choices[0].message.content.strip()
+            # Clean up the topic
+            topic = topic.replace('"', '').replace("'", "").strip()
+            if len(topic) > 50:  # Too long, truncate
+                topic = topic[:50]
+            return topic if topic else None
+    except Exception as e:
+        print(f"Topic detection LLM error: {e}")
+    return None
+
 @app.route('/')
 def index():
     if 'user_id' not in session:
         session['user_id'] = str(uuid.uuid4())
     
-    # Always open on the start page (Welcome Screen)
-    # We clear the active conversation state to force the welcome view
-    session.pop('current_conversation_id', None)
-    session.pop('subject', None)
+    # We no longer pop current_conversation_id here to avoid losing context
+    # if the user accidentally hits the home route or refreshes.
         
     return render_template('chat.html')
 
@@ -192,6 +236,18 @@ def get_stats():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/topics')
+def get_topics():
+    """Get all detected topics for the current user with timestamps."""
+    if 'user_id' not in session:
+        return jsonify({"error": "Unauthorized"}), 401
+    
+    try:
+        topic_summary = db.get_topic_summary(session['user_id'])
+        return jsonify(topic_summary)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 @app.route('/dashboard')
 def dashboard():
     return render_template('dashboard.html')
@@ -235,6 +291,15 @@ def message():
             language = data.get('language', 'English')
         
         conversation_id = session.get('current_conversation_id')
+        
+        # Fallback: if missing from session, try to get the latest one from DB
+        if not conversation_id:
+            user_id = session.get('user_id')
+            if user_id:
+                latest_conv = db.get_conversations_by_session(user_id)
+                if latest_conv:
+                    conversation_id = latest_conv[0]['id']
+                    session['current_conversation_id'] = conversation_id
         
         if not conversation_id:
             return jsonify({"error": "No active conversation"}), 400
@@ -311,35 +376,105 @@ def message_stream():
         return jsonify({"error": "Unauthorized"}), 401
     
     if 'current_conversation_id' not in session:
+        # Fallback: if missing from session, try to get the latest one from DB
+        user_id = session.get('user_id')
+        if user_id:
+            latest_conv = db.get_conversations_by_session(user_id)
+            if latest_conv:
+                session['current_conversation_id'] = latest_conv[0]['id']
+        
+    if 'current_conversation_id' not in session:
         return jsonify({"error": "No active conversation"}), 400
     
     data = request.json
     user_input = data.get('message', '').strip()
     language = data.get('language', 'English')
+    tagged_files = data.get('tagged_files', [])
     
     if not user_input:
         return jsonify({"error": "Message is required"}), 400
     
-    conversation_id = session['current_conversation_id']
-    subject = session.get('subject', 'General Topic')
+    # Build conversation history
+    history = db.get_messages(conversation_id, limit=6)
+    history_text = ""
+    for msg in reversed(history):
+        role = "Student" if msg['role'] == 'user' else "Socrates"
+        history_text += f"{role}: {msg['content']}\n"
     
-    # RAG retrieval
+    # RAG retrieval - use file-specific context if files are tagged
     context = ""
     try:
-        context = rag_engine.get_formatted_context(user_input)
+        if tagged_files and len(tagged_files) > 0:
+            # Use file-specific retrieval
+            context = rag_engine.get_formatted_context_for_files(user_input, tagged_files)
+        else:
+            context = rag_engine.get_formatted_context(user_input)
     except Exception as e:
         print(f"RAG Retrieval Error: {e}")
     
-    # Build prompt (simplified for streaming)
-    prompt = f"""You are an expert AI tutor teaching about {subject}.
-IMPORTANT: Write the entire response in {language}.
+    # Build prompt based on context
+    if tagged_files:
+        # Files are tagged - focus ONLY on the file content
+        file_list = ', '.join(tagged_files)
+        prompt = f"""You are Socrates, an expert AI tutor with access to the student's documents.
 
+IMPORTANT: Write your response in {language}.
+
+The student has specifically referenced these files: {file_list}
 {context}
 
 The student asked: "{user_input}"
 
-Provide a clear, detailed explanation. Use examples where helpful.
-If the provided 'CONTEXT FROM UPLOADED DOCUMENTS' is relevant, USE IT."""
+CRITICAL INSTRUCTIONS:
+1. Focus ONLY on the content from the referenced files
+2. If the student asks "tell me about this" or similar, summarize the key points from the file(s)
+3. If the file content is available in the context above, use it directly
+4. If no relevant content is found, say "I couldn't find specific information in the referenced files. Could you upload the file or ask about something else?"
+5. Do NOT make up content that isn't in the files
+6. Do NOT reference the conversation's original topic unless it's relevant to the files
+
+Provide a helpful, accurate response based on the file content."""
+    
+    else:
+        # Regular question - provide substantive teaching
+        prompt = f"""You are Socrates, an AI tutor who teaches about {subject}.
+
+IMPORTANT: Write your response in {language}.
+
+Current learning topic: {subject}
+
+PREVIOUS CONVERSATION (Use this to avoid repetition and follow the flow):
+{history_text}
+
+NEW CONTEXT FROM DOCUMENTS:
+{context}
+
+The student said: "{user_input}"
+
+TEACHING APPROACH & INTERACTION LOGIC:
+1. **CRITICAL: Explicit Topic Advancement**: If the student affirms your previous suggestion (e.g., "yes", "proceed", "continue"):
+   - **DO NOT** repeat the general definition of {subject}. 
+   - **DO NOT** give another "introductory overview" or high-level summary.
+   - **Immediately** start professional level teaching on the **specific sub-topic** you suggested in the very last message. 
+   - Use the `{context}` to see what you've already taught and move **forward**.
+
+2. **Contextual Quiz Mode**: 
+   - Generate 3 questions based *exclusively* on context already taught. 
+   - No intro summary. No answers.
+
+3. **Logical Pathing (Suggestions)**: 
+   - Every response **MUST END** by suggesting the **next logical sub-topic** as a question. Think like a curriculum developer—what is the next specific skill or concept?
+
+CRITICAL RULES:
+- **NO REPETITION**: If you've defined something once, never define it again.
+- **NO CASUAL GREETINGS**.
+- **START IMMEDIATELY**: Focus 100% on the next step in the journey.
+- **DEPTH**: Provide detailed explanations, examples, and analogies for the specific sub-topic at hand.
+
+RESPONSE FORMAT (150-250 words):
+- Use **bold** for new technical terms.
+- Use bullet points for steps or components.
+- **ONLY** end with a question suggesting the **next** logical concept. """
 
     def generate():
         full_response = ""
@@ -348,8 +483,19 @@ If the provided 'CONTEXT FROM UPLOADED DOCUMENTS' is relevant, USE IT."""
             yield chunk
         
         # Save to DB after stream completes
-        db.add_message(conversation_id, "user", user_input, "question")
+        user_msg = user_input
+        if tagged_files:
+            user_msg = f"[Referencing: {', '.join(tagged_files)}] {user_input}"
+        db.add_message(conversation_id, "user", user_msg, "question")
         db.add_message(conversation_id, "assistant", full_response, "answer")
+        
+        # Detect and save topic (async-like, after response)
+        try:
+            detected_topic = detect_topic(user_input, tagged_files)
+            if detected_topic:
+                db.add_topic(conversation_id, detected_topic)
+        except Exception as e:
+            print(f"Topic detection error: {e}")
     
     return Response(generate(), mimetype='text/plain')
 
@@ -431,6 +577,23 @@ def upload_document():
         print(f"Document Upload Error: {e}")
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/knowledge_base', methods=['GET'])
+def get_knowledge_base():
+    """Get information about documents in the knowledge base."""
+    try:
+        info = rag_engine.get_knowledge_base_info()
+        return jsonify(info)
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/knowledge_base', methods=['DELETE'])
+def delete_knowledge_base():
+    """Clear all documents from the knowledge base."""
+    try:
+        rag_engine.clear_knowledge_base()
+        return jsonify({"status": "success", "message": "Knowledge base cleared"})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/upload_image', methods=['POST'])
 def upload_image():

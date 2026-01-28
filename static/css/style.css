@@ -985,3 +985,71 @@ textarea.chat-input::placeholder {
     font-family: 'Fira Code', 'Consolas', monospace;
     font-size: 0.9em;
 }
+
+/* Home Page Input Container */
+.home-input-container {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 0;
+    padding: 1rem 1.25rem;
+    border-radius: 20px;
+    background: linear-gradient(var(--bg-secondary), var(--bg-secondary)) padding-box,
+        linear-gradient(135deg, var(--accent-primary), var(--accent-secondary), #8b5cf6) border-box;
+    border: 2px solid transparent;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25),
+        0 0 80px rgba(56, 189, 248, 0.08);
+}
+
+.home-input-container:focus-within {
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3),
+        0 0 80px rgba(56, 189, 248, 0.15);
+}
+
+.home-chat-input {
+    min-height: 50px;
+    padding: 0.75rem 0;
+    font-size: 1.1rem;
+    resize: none;
+    transition: min-height 0.2s ease;
+}
+
+.home-chat-input.expanded {
+    min-height: 150px;
+}
+
+.home-action-bar {
+    margin-top: 0.75rem;
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border-color);
+}
+
+/* Home Preview Area */
+.home-preview-area {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem 1rem;
+    margin-bottom: 0.75rem;
+    background: rgba(56, 189, 248, 0.1);
+    border-radius: 12px;
+    border: 1px solid rgba(56, 189, 248, 0.2);
+}
+
+.home-preview-area .preview-info {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex: 1;
+}
+
+.home-preview-area .preview-info i {
+    font-size: 1.25rem;
+}
+
+.home-preview-area .preview-info span {
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}

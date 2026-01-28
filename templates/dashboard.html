@@ -9,7 +9,7 @@
     <div style="padding: 2rem; overflow-y: auto;">
         <!-- Stats Cards -->
         <div
-            style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
+            style="display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 1.5rem; margin-bottom: 2rem;">
             <div class="suggestion-card" style="cursor: default;">
                 <div class="suggestion-icon" style="background: rgba(56, 189, 248, 0.1); color: var(--accent-primary);">
                     <i class="fas fa-comments"></i>
@@ -30,40 +30,153 @@
                     <p style="color: var(--text-secondary); font-size: 0.9rem;">Messages Exchanged</p>
                 </div>
             </div>
+
+            <div class="suggestion-card" style="cursor: default;">
+                <div class="suggestion-icon" style="background: rgba(52, 211, 153, 0.1); color: #34d399;">
+                    <i class="fas fa-tags"></i>
+                </div>
+                <div>
+                    <h3 style="font-size: 2rem; font-weight: 700; margin-bottom: 0.25rem;" id="unique-topics">-</h3>
+                    <p style="color: var(--text-secondary); font-size: 0.9rem;">Topics Explored</p>
+                </div>
+            </div>
         </div>
 
-        <!-- Charts -->
+        <!-- Charts and Topics Grid -->
         <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(400px, 1fr)); gap: 1.5rem;">
+            <!-- Topic Breakdown Chart -->
             <div class="suggestion-card" style="cursor: default; display: block;">
-                <h3 style="margin-bottom: 1.5rem; font-size: 1.1rem;">Topic Breakdown</h3>
+                <h3 style="margin-bottom: 1.5rem; font-size: 1.1rem;">Lesson Breakdown</h3>
                 <div style="position: relative; height: 300px;">
                     <canvas id="subjectChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Recent Topics List -->
+            <div class="suggestion-card" style="cursor: default; display: block;">
+                <h3 style="margin-bottom: 1.5rem; font-size: 1.1rem;"><i class="fas fa-clock"></i> Recent Topics
+                    Discussed</h3>
+                <div id="recent-topics-list" style="max-height: 300px; overflow-y: auto;">
+                    <p style="color: var(--text-secondary); text-align: center;">Loading topics...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Top Topics Chart -->
+        <div style="margin-top: 1.5rem;">
+            <div class="suggestion-card" style="cursor: default; display: block;">
+                <h3 style="margin-bottom: 1.5rem; font-size: 1.1rem;"><i class="fas fa-fire"></i> Most Discussed Topics
+                </h3>
+                <div style="position: relative; height: 250px;">
+                    <canvas id="topTopicsChart"></canvas>
                 </div>
             </div>
         </div>
     </div>
 </div>
 
+<style>
+    .topic-item {
+        display: flex;
+        align-items: center;
+        padding: 0.75rem 1rem;
+        background: rgba(255, 255, 255, 0.03);
+        border-radius: 8px;
+        margin-bottom: 0.5rem;
+        transition: background 0.2s;
+    }
+
+    .topic-item:hover {
+        background: rgba(255, 255, 255, 0.06);
+    }
+
+    .topic-icon {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: rgba(56, 189, 248, 0.15);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-right: 0.75rem;
+        color: var(--accent-primary);
+        font-size: 0.85rem;
+    }
+
+    .topic-info {
+        flex: 1;
+    }
+
+    .topic-name {
+        font-weight: 500;
+        color: var(--text-primary);
+        margin-bottom: 0.15rem;
+    }
+
+    .topic-meta {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+    }
+
+    .topic-time {
+        font-size: 0.75rem;
+        color: var(--text-secondary);
+        white-space: nowrap;
+    }
+
+    .no-topics {
+        text-align: center;
+        padding: 2rem;
+        color: var(--text-secondary);
+    }
+</style>
+
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+    function formatTimestamp(timestamp) {
+        if (!timestamp) return '';
+        const date = new Date(timestamp);
+        const now = new Date();
+        const diff = now - date;
+
+        // Less than 1 hour
+        if (diff < 3600000) {
+            const mins = Math.floor(diff / 60000);
+            return mins <= 1 ? 'Just now' : `${mins}m ago`;
+        }
+        // Less than 24 hours
+        if (diff < 86400000) {
+            const hours = Math.floor(diff / 3600000);
+            return `${hours}h ago`;
+        }
+        // Less than 7 days
+        if (diff < 604800000) {
+            const days = Math.floor(diff / 86400000);
+            return `${days}d ago`;
+        }
+        // Otherwise show date
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    }
+
     document.addEventListener('DOMContentLoaded', async () => {
         try {
-            const response = await fetch('/api/stats');
-            const data = await response.json();
+            // Fetch stats (existing)
+            const statsResponse = await fetch('/api/stats');
+            const statsData = await statsResponse.json();
 
             // Update cards
-            document.getElementById('total-convs').textContent = data.total_conversations;
-            document.getElementById('total-msgs').textContent = data.total_messages;
+            document.getElementById('total-convs').textContent = statsData.total_conversations;
+            document.getElementById('total-msgs').textContent = statsData.total_messages;
 
-            // Render Chart
+            // Render Lesson Chart
             const ctx = document.getElementById('subjectChart').getContext('2d');
             new Chart(ctx, {
                 type: 'bar',
                 data: {
-                    labels: data.subjects.labels,
+                    labels: statsData.subjects.labels,
                     datasets: [{
-                        label: 'Messages per Topic',
-                        data: data.subjects.data,
+                        label: 'Messages per Lesson',
+                        data: statsData.subjects.data,
                         backgroundColor: 'rgba(56, 189, 248, 0.6)',
                         borderColor: 'rgba(56, 189, 248, 1)',
                         borderWidth: 1,
@@ -90,9 +203,75 @@
                 }
             });
 
+            // Fetch topics
+            const topicsResponse = await fetch('/api/topics');
+            const topicsData = await topicsResponse.json();
+
+            // Update unique topics count
+            document.getElementById('unique-topics').textContent = topicsData.unique_topics || 0;
+
+            // Render recent topics list
+            const topicsList = document.getElementById('recent-topics-list');
+            if (topicsData.recent_topics && topicsData.recent_topics.length > 0) {
+                topicsList.innerHTML = topicsData.recent_topics.map(topic => `
+                    <div class="topic-item">
+                        <div class="topic-icon"><i class="fas fa-lightbulb"></i></div>
+                        <div class="topic-info">
+                            <div class="topic-name">${topic.topic}</div>
+                            <div class="topic-meta">from "${topic.conversation_subject}"</div>
+                        </div>
+                        <div class="topic-time">${formatTimestamp(topic.detected_at)}</div>
+                    </div>
+                `).join('');
+            } else {
+                topicsList.innerHTML = '<div class="no-topics"><i class="fas fa-info-circle"></i> No topics detected yet. Start a conversation to see your topics!</div>';
+            }
+
+            // Render top topics chart
+            if (topicsData.topic_counts && topicsData.topic_counts.length > 0) {
+                const topLabels = topicsData.topic_counts.map(t => t.topic);
+                const topValues = topicsData.topic_counts.map(t => t.count);
+
+                const topCtx = document.getElementById('topTopicsChart').getContext('2d');
+                new Chart(topCtx, {
+                    type: 'doughnut',
+                    data: {
+                        labels: topLabels,
+                        datasets: [{
+                            data: topValues,
+                            backgroundColor: [
+                                'rgba(56, 189, 248, 0.8)',
+                                'rgba(129, 140, 248, 0.8)',
+                                'rgba(52, 211, 153, 0.8)',
+                                'rgba(251, 146, 60, 0.8)',
+                                'rgba(236, 72, 153, 0.8)',
+                                'rgba(167, 139, 250, 0.8)',
+                                'rgba(74, 222, 128, 0.8)',
+                                'rgba(250, 204, 21, 0.8)'
+                            ],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: {
+                                position: 'right',
+                                labels: { color: '#94a3b8', padding: 15 }
+                            }
+                        }
+                    }
+                });
+            } else {
+                document.getElementById('topTopicsChart').parentElement.innerHTML =
+                    '<div class="no-topics"><i class="fas fa-chart-pie"></i> Topic chart will appear after you discuss various subjects.</div>';
+            }
+
         } catch (e) {
-            console.error("Error loading stats:", e);
+            console.error("Error loading dashboard:", e);
         }
     });
+
 </script>
 {% endblock %}

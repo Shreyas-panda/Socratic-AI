@@ -38,6 +38,17 @@ class TutorialDatabase:
             )
         ''')
         
+        # Create topics table for multi-subject tracking
+        cursor.execute('''
+            CREATE TABLE IF NOT EXISTS topics (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                conversation_id INTEGER,
+                topic TEXT NOT NULL,
+                detected_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                FOREIGN KEY (conversation_id) REFERENCES conversations (id)
+            )
+        ''')
+        
         conn.commit()
         conn.close()
     
@@ -300,4 +311,128 @@ class TutorialDatabase:
             "total_conversations": stats['total_conversations'],
             "total_messages": stats['total_messages'],
             "subjects": subjects_dict
-        } 
+        }
+    
+    # Topic Tracking Methods
+    def add_topic(self, conversation_id: int, topic: str):
+        """Add a detected topic for a conversation."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # Check if this exact topic already exists for this conversation
+        cursor.execute('''
+            SELECT id FROM topics WHERE conversation_id = ? AND topic = ?
+        ''', (conversation_id, topic))
+        
+        if cursor.fetchone() is None:
+            cursor.execute('''
+                INSERT INTO topics (conversation_id, topic)
+                VALUES (?, ?)
+            ''', (conversation_id, topic))
+            conn.commit()
+        
+        conn.close()
+    
+    def get_topics_by_conversation(self, conversation_id: int) -> List[Dict[str, Any]]:
+        """Get all topics for a specific conversation."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT topic, detected_at FROM topics
+            WHERE conversation_id = ?
+            ORDER BY detected_at ASC
+        ''', (conversation_id,))
+        
+        topics = []
+        for row in cursor.fetchall():
+            topics.append({
+                "topic": row[0],
+                "detected_at": row[1]
+            })
+        
+        conn.close()
+        return topics
+    
+    def get_all_topics_by_session(self, session_id: str) -> List[Dict[str, Any]]:
+        """Get all detected topics across all conversations for a session."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        cursor.execute('''
+            SELECT t.topic, t.detected_at, c.id as conversation_id, c.subject
+            FROM topics t
+            JOIN conversations c ON t.conversation_id = c.id
+            WHERE c.session_id = ?
+            ORDER BY t.detected_at DESC
+        ''', (session_id,))
+        
+        topics = []
+        for row in cursor.fetchall():
+            topics.append({
+                "topic": row[0],
+                "detected_at": row[1],
+                "conversation_id": row[2],
+                "original_subject": row[3]
+            })
+        
+        conn.close()
+        return topics
+    
+    def get_topic_summary(self, session_id: str) -> Dict[str, Any]:
+        """Get topic statistics and recent topics for dashboard."""
+        conn = sqlite3.connect(self.db_path)
+        cursor = conn.cursor()
+        
+        # Get unique topic count
+        cursor.execute('''
+            SELECT COUNT(DISTINCT t.topic)
+            FROM topics t
+            JOIN conversations c ON t.conversation_id = c.id
+            WHERE c.session_id = ?
+        ''', (session_id,))
+        unique_topics = cursor.fetchone()[0]
+        
+        # Get topic frequency
+        cursor.execute('''
+            SELECT t.topic, COUNT(*) as count
+            FROM topics t
+            JOIN conversations c ON t.conversation_id = c.id
+            WHERE c.session_id = ?
+            GROUP BY t.topic
+            ORDER BY count DESC
+            LIMIT 10
+        ''', (session_id,))
+        
+        topic_counts = []
+        for row in cursor.fetchall():
+            topic_counts.append({
+                "topic": row[0],
+                "count": row[1]
+            })
+        
+        # Get recent topics (last 10)
+        cursor.execute('''
+            SELECT t.topic, t.detected_at, c.subject
+            FROM topics t
+            JOIN conversations c ON t.conversation_id = c.id
+            WHERE c.session_id = ?
+            ORDER BY t.detected_at DESC
+            LIMIT 10
+        ''', (session_id,))
+        
+        recent_topics = []
+        for row in cursor.fetchall():
+            recent_topics.append({
+                "topic": row[0],
+                "detected_at": row[1],
+                "conversation_subject": row[2]
+            })
+        
+        conn.close()
+        
+        return {
+            "unique_topics": unique_topics,
+            "topic_counts": topic_counts,
+            "recent_topics": recent_topics
+        }

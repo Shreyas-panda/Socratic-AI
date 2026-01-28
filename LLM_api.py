@@ -17,6 +17,9 @@ if GROQ_API_KEY:
     client = Groq(api_key=GROQ_API_KEY)
     LLM_PROVIDER = "groq"
     DEFAULT_MODEL = "llama-3.3-70b-versatile"
+    # Llama 3.2 vision models were decommissioned in Jan 2026. 
+    # Switching to the new Llama 4 multimodal (vision) models.
+    VISION_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 elif OPENROUTER_API_KEY:
     print("Using OpenRouter API (fallback)")
     client = OpenAI(
@@ -25,6 +28,8 @@ elif OPENROUTER_API_KEY:
     )
     LLM_PROVIDER = "openrouter"
     DEFAULT_MODEL = "meta-llama/llama-3.3-70b-instruct:free"
+    # Using Gemini 2.0 Flash as the most stable free vision model on OpenRouter
+    VISION_MODEL = "google/gemini-2.0-flash-exp:free"
 else:
     raise ValueError(
         "No API key found. Please set GROQ_API_KEY (recommended) or OPENROUTER_API_KEY in .env"

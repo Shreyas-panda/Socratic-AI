@@ -7,7 +7,7 @@ from PIL import Image
 import base64
 from io import BytesIO
 from datetime import datetime
-from LLM_api import client
+from LLM_api import client, VISION_MODEL
 
 # Directory for storing uploaded images
 IMAGES_DIR = "uploaded_images"
@@ -99,9 +99,9 @@ def analyze_image_with_llm(image_path: str, user_question: str, subject: str) ->
     ]
     
     try:
-        # Use vision model (Gemini 2.0 Flash - Free via OpenRouter)
+        # Use vision model from LLM_api
         completion = client.chat.completions.create(
-            model="google/gemini-2.0-flash-exp:free",
+            model=VISION_MODEL,
             messages=messages,
             max_tokens=1000,
             extra_headers={
@@ -145,7 +145,7 @@ def get_image_description(image_path: str) -> str:
     
     try:
         completion = client.chat.completions.create(
-            model="google/gemini-2.0-flash-exp:free",
+            model=VISION_MODEL,
             messages=messages,
             max_tokens=100,
             extra_headers={
