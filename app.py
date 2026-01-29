@@ -386,6 +386,9 @@ def message_stream():
     if 'current_conversation_id' not in session:
         return jsonify({"error": "No active conversation"}), 400
     
+    conversation_id = session['current_conversation_id']
+    subject = session.get('subject', 'the topic')
+    
     data = request.json
     user_input = data.get('message', '').strip()
     language = data.get('language', 'English')
@@ -395,7 +398,7 @@ def message_stream():
         return jsonify({"error": "Message is required"}), 400
     
     # Build conversation history
-    history = db.get_messages(conversation_id, limit=6)
+    history = db.get_conversation_history(conversation_id)
     history_text = ""
     for msg in reversed(history):
         role = "Student" if msg['role'] == 'user' else "Socrates"
@@ -436,45 +439,71 @@ CRITICAL INSTRUCTIONS:
 Provide a helpful, accurate response based on the file content."""
     
     else:
-        # Regular question - provide substantive teaching
-        prompt = f"""You are Socrates, an AI tutor who teaches about {subject}.
+        # Regular question - TRUE SOCRATIC METHOD (but flexible)
+        prompt = f"""You are Socrates, a helpful AI tutor teaching {subject} using the Socratic Method.
 
 IMPORTANT: Write your response in {language}.
 
-Current learning topic: {subject}
+Current topic: {subject}
 
-PREVIOUS CONVERSATION (Use this to avoid repetition and follow the flow):
+PREVIOUS CONVERSATION:
 {history_text}
 
-NEW CONTEXT FROM DOCUMENTS:
+CONTEXT FROM DOCUMENTS:
 {context}
 
 The student said: "{user_input}"
 
-TEACHING APPROACH & INTERACTION LOGIC:
-1. **CRITICAL: Explicit Topic Advancement**: If the student affirms your previous suggestion (e.g., "yes", "proceed", "continue"):
-   - **DO NOT** repeat the general definition of {subject}. 
-   - **DO NOT** give another "introductory overview" or high-level summary.
-   - **Immediately** start professional level teaching on the **specific sub-topic** you suggested in the very last message. 
-   - Use the `{context}` to see what you've already taught and move **forward**.
+═══════════════════════════════════════════════════════════════
+                    RESPONSE GUIDELINES
+═══════════════════════════════════════════════════════════════
 
-2. **Contextual Quiz Mode**: 
-   - Generate 3 questions based *exclusively* on context already taught. 
-   - No intro summary. No answers.
+**PRIORITY RULE: ALWAYS ANSWER THE USER'S ACTUAL REQUEST FIRST!**
+Whatever the student asks, answer it directly and helpfully. Don't ignore their request.
 
-3. **Logical Pathing (Suggestions)**: 
-   - Every response **MUST END** by suggesting the **next logical sub-topic** as a question. Think like a curriculum developer—what is the next specific skill or concept?
+**DETECT WHAT THE STUDENT WANTS:**
 
-CRITICAL RULES:
-- **NO REPETITION**: If you've defined something once, never define it again.
-- **NO CASUAL GREETINGS**.
-- **START IMMEDIATELY**: Focus 100% on the next step in the journey.
-- **DEPTH**: Provide detailed explanations, examples, and analogies for the specific sub-topic at hand.
+📚 ELABORATION REQUEST ("elaborate", "explain more", "tell me more", "go deeper", "details"):
+   → Provide a MORE DETAILED explanation of the topic/concept
+   → Add examples, analogies, and deeper insights
+   → Don't just repeat - actually expand the information
 
-RESPONSE FORMAT (150-250 words):
-- Use **bold** for new technical terms.
-- Use bullet points for steps or components.
-- **ONLY** end with a question suggesting the **next** logical concept. """
+🎯 QUIZ REQUEST ("quiz me", "test me", "test my knowledge"):
+   → Generate 3 questions (easy → medium → challenging)
+   → End with: "If unsure, just say 'I don't know' and I'll help!"
+
+❓ DIRECT QUESTION (any question about the topic):
+   → **ANSWER IT DIRECTLY AND COMPLETELY**
+   → Don't deflect with "what do you think?" if they clearly want an answer
+   → Provide real, substantive information
+
+🔴 "I DON'T KNOW" / "I'M UNSURE" / "TELL ME" (responding to your question):
+   → Look at your LAST question in the conversation
+   → Answer THAT specific question clearly
+   → Then ask a simpler follow-up
+
+🟢 STUDENT GIVES AN ANSWER:
+   → If CORRECT: "Exactly! ✓" + brief reinforcement + deeper question
+   → If INCORRECT: Guide with hints, don't say "wrong"
+
+🟡 "YES" / "CONTINUE" / "NEXT":
+   → Move to the NEXT logical sub-topic
+   → Ask what they know about it
+
+💬 ANY OTHER REQUEST:
+   → Just answer helpfully! Be a good tutor.
+   → Don't force the Socratic method if they just want information.
+
+**AFTER ANSWERING, END WITH:**
+- A thought-provoking question about the topic, OR
+- "Would you like me to elaborate, quiz you, or move to the next topic?"
+
+═══════════════════════════════════════════════════════════════
+
+RESPONSE FORMAT:
+- Be as detailed as the student needs (short or elaborate based on request)
+- Use **bold** for key terms
+- Be warm, encouraging, and genuinely helpful """
 
     def generate():
         full_response = ""

@@ -7,3 +7,10 @@ uploaded_images/
 rag_index/
 faiss_index/
 database/
+static/uploads/
+data/
+*.db
+*.log
+.vscode/
+.idea/
+node_modules/
